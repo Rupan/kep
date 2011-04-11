@@ -2,31 +2,10 @@
 #include <string.h>
 #include <inttypes.h>
 #include <gmp.h>
+#include "emsa-pss.h"
 #include "pss-vect.h"
 
 const uint8_t *salt;
-
-static void rsa_init(rsa_t *rsa) {
-  mpz_init(rsa->n);
-  mpz_init(rsa->e);
-  mpz_init(rsa->d);
-  mpz_init(rsa->p);
-  mpz_init(rsa->q);
-  mpz_init(rsa->dmp1);
-  mpz_init(rsa->dmq1);
-  mpz_init(rsa->iqmp);
-}
-
-static void rsa_free(rsa_t *rsa) {
-  mpz_clear(rsa->n);
-  mpz_clear(rsa->e);
-  mpz_clear(rsa->d);
-  mpz_clear(rsa->p);
-  mpz_clear(rsa->q);
-  mpz_clear(rsa->dmp1);
-  mpz_clear(rsa->dmq1);
-  mpz_clear(rsa->iqmp);
-}
 
 static void print_bytes(const uint8_t *data, uint32_t len) {
   uint32_t i;

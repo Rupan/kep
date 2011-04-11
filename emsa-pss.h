@@ -15,4 +15,7 @@ typedef struct _rsa_t {
 int32_t emsa_pss_encode(uint8_t *em, uint32_t emBits, uint8_t *m, uint32_t mBytes);
 int32_t emsa_pss_verify(uint8_t *em, uint32_t emBits, uint8_t *m, uint32_t mBytes);
 
+void rsa_init(rsa_t *rsa);
+void rsa_free(rsa_t *rsa);
+
 #endif /* _EMSA_PSS_H */

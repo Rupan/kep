@@ -20,6 +20,8 @@
 #include <endian.h>
 #include <string.h>
 #include <inttypes.h>
+#include <gmp.h>
+#include "emsa-pss.h"
 
 #ifndef BYTE_ORDER
 #error The platform byte order is not defined, please fix it.
@@ -40,6 +42,28 @@
 #define HASH_UPDATE(ctx, input, ilen) sha256_hash((input), (ilen), (ctx))
 #define HASH_FINISH(ctx, output) sha256_end((output), (ctx))
 #endif
+
+void rsa_init(rsa_t *rsa) {
+  mpz_init(rsa->n);
+  mpz_init(rsa->e);
+  mpz_init(rsa->d);
+  mpz_init(rsa->p);
+  mpz_init(rsa->q);
+  mpz_init(rsa->dmp1);
+  mpz_init(rsa->dmq1);
+  mpz_init(rsa->iqmp);
+}
+
+void rsa_free(rsa_t *rsa) {
+  mpz_clear(rsa->n);
+  mpz_clear(rsa->e);
+  mpz_clear(rsa->d);
+  mpz_clear(rsa->p);
+  mpz_clear(rsa->q);
+  mpz_clear(rsa->dmp1);
+  mpz_clear(rsa->dmq1);
+  mpz_clear(rsa->iqmp);
+}
 
 /* this function must be defined: it writes dlen bytes to dst */
 int32_t fill_random(uint8_t *dst, uint32_t dlen);
