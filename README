@@ -1,0 +1,3 @@
+Key exchange protocol
+
+This module implements DH key exchange using GMP and a small RSA implementation.
