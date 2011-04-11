@@ -266,6 +266,9 @@ void rsasp1(uint8_t *signature, uint8_t *message, rsa_t *rsa) {
   mpz_mul(s, rsa->q, h);
   mpz_add(s, s, s2);
 
+  /* We can also calculate s the traditional way: */
+  /* mpz_powm(s, m, rsa->d, rsa->n); */
+
   /**************************************************/
 
   ctbits = mpz_sizeinbase(s, 2);
