@@ -1,0 +1,45 @@
+RSA-DH
+
+DEFINITIONS EXPLICIT TAGS ::=
+
+BEGIN
+
+  -- PKCS1: RSA keys (from e.g. openssl genrsa) are defined below --
+
+  RSAPublicKey ::= SEQUENCE {
+      modulus            INTEGER, -- (Usually large) n = p*q
+      publicExponent     INTEGER  -- (Usually small) e
+  }
+
+  Version ::= INTEGER { two-prime(0), multi(1) }
+     (CONSTRAINED BY {-- version must be multi if otherPrimeInfos present --})
+
+  OtherPrimeInfos ::= SEQUENCE SIZE(1..MAX) OF OtherPrimeInfo
+  OtherPrimeInfo ::= SEQUENCE {
+      prime              INTEGER, -- ri
+      exponent           INTEGER, -- di
+      coefficient        INTEGER  -- ti
+  }
+
+  RSAPrivateKey ::= SEQUENCE {
+      version            Version, -- two-prime or multi-prime
+      modulus            INTEGER, -- (Usually large) n
+      publicExponent     INTEGER, -- (Usually small) e
+      privateExponent    INTEGER, -- (Usually large) d
+      prime1             INTEGER, -- (Usually large) p
+      prime2             INTEGER, -- (Usually large) q
+      exponent1          INTEGER, -- (Usually large) d mod (p-1)
+      exponent2          INTEGER, -- (Usually large) d mod (q-1)
+      coefficient        INTEGER, -- (Usually large) (inverse of q) mod p
+      otherPrimeInfos    OtherPrimeInfos OPTIONAL
+  }
+
+  -- PKCS3: DHM parameters (from e.g. openssl dhparam) are defined below --
+
+  DHParameter ::= SEQUENCE {
+      prime              INTEGER, -- (Usually large) p
+      base               INTEGER, -- (Usually small) g
+      privateValueLength INTEGER OPTIONAL
+  }
+
+END
