@@ -1,3 +1,4 @@
 sha1.o
 tests.c
 vectors
+asn1c.a

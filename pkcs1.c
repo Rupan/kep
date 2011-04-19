@@ -21,7 +21,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <gmp.h>
-#include "emsa-pss.h"
+#include "pkcs1.h"
 
 #ifndef BYTE_ORDER
 #error The platform byte order is not defined, please fix it.
