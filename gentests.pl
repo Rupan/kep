@@ -30,9 +30,11 @@ for(my $i = 1; $i <= 10; $i++) {
     my $base = "k${i}m${j}";
     print "  printf(\"\tmessage ${j} [bits:bytes => $bits:$bytes] \");\n";
     print "  salt = ${base}_salt;\n";
-    print "  emsa_pss_encode(EM, $bits, (uint8_t *)${base}_plain, sizeof(${base}_plain));\n";
-    print "  ret = emsa_pss_verify(EM, $bits, (uint8_t *)${base}_plain, sizeof(${base}_plain));\n";
-    print "  emsa_pss_encode(EM, $bits, (uint8_t *)${base}_plain, sizeof(${base}_plain));\n";
+    print "  m.data = (uint8_t *)${base}_plain;\n";
+    print "  m.size = (uint32_t)sizeof(${base}_plain);\n";
+    print "  emsa_pss_encode(EM, $bits, &m);\n";
+    print "  ret = emsa_pss_verify(EM, $bits, &m);\n";
+    print "  emsa_pss_encode(EM, $bits, &m);\n";
     print "  rsasp1(SM, EM, &rsa);\n";
     print "  ret = memcmp(${base}_sig, SM, $bytes );\n";
     print "  if( ret != 0 ) {\n";

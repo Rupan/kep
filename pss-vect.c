@@ -2,7 +2,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <gmp.h>
-#include "emsa-pss.h"
+#include "pkcs1.h"
 #include "pss-vect.h"
 
 const uint8_t *salt;
@@ -28,6 +28,7 @@ int32_t fill_random(uint8_t *dst, uint32_t dlen) {
 int main(int argc, char **argv) {
   int ret;
   rsa_t rsa;
+  datum_t m;
   uint8_t EM[256], SM[256];
 
   rsa_init(&rsa);

@@ -106,7 +106,7 @@ static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t sle
   -1     : "encoding error"
 */
 
-int32_t emsa_pss_encode(uint8_t *em, uint32_t emBits, uint8_t *m, uint32_t mBytes) {
+int32_t emsa_pss_encode(uint8_t *em, uint32_t emBits, datum_t *m) {
   uint32_t i, emLen, psLen, offset;
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], *p, *q;
@@ -129,7 +129,7 @@ int32_t emsa_pss_encode(uint8_t *em, uint32_t emBits, uint8_t *m, uint32_t mByte
   for(i = 0; i < 8; i++) p[i] = 0x00;
   p += 8;
   HASH_STARTS(ctx);
-  HASH_UPDATE(ctx, m, mBytes);
+  HASH_UPDATE(ctx, m->data, m->size);
   HASH_FINISH(ctx, p);
   p += HASH_DIGEST_SIZE;
   if( fill_random(p, HASH_DIGEST_SIZE) < 0 )
@@ -176,7 +176,7 @@ int32_t emsa_pss_encode(uint8_t *em, uint32_t emBits, uint8_t *m, uint32_t mByte
   -2     : computed hash H' does not match transmitted hash H
 */
 
-int32_t emsa_pss_verify(uint8_t *em, uint32_t emBits, uint8_t *m, uint32_t mBytes) {
+int32_t emsa_pss_verify(uint8_t *em, uint32_t emBits, datum_t *m) {
   uint8_t mask;
   int32_t ret;
   uint32_t i, emLen, dbLen, offset;
@@ -211,7 +211,7 @@ int32_t emsa_pss_verify(uint8_t *em, uint32_t emBits, uint8_t *m, uint32_t mByte
   for(i = 0; i < 8; i++) p[i] = 0x00;
   p += 8;
   HASH_STARTS(ctx);
-  HASH_UPDATE(ctx, m, mBytes);
+  HASH_UPDATE(ctx, m->data, m->size);
   HASH_FINISH(ctx, p);
   p += HASH_DIGEST_SIZE;
   for(i = 0; i < HASH_DIGEST_SIZE; i++)
