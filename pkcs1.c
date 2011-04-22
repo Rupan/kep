@@ -102,7 +102,11 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_import(s, signature->size, 1, 1, 1, 0, signature->data);
   ret = mpz_cmp(s, rsa->n);
   /* "signature representative out of range" */
-  if(ret >= 0 ) return -1;
+  if(ret >= 0 ) {
+    mpz_clear(m);
+    mpz_clear(s);
+    return -1;
+  }
   mpz_powm(m, s, rsa->e, rsa->n);
   mBits = mpz_sizeinbase(m, 2);
   mBytes = mBits >> 3;
