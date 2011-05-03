@@ -17,7 +17,7 @@ typedef struct _datum_t {
   uint32_t size;
 } datum_t;
 
-int32_t emsa_pss_encode(uint8_t *em, rsa_t *rsa, datum_t *m);
+int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m);
 int32_t emsa_pss_verify(uint8_t *em, rsa_t *rsa, datum_t *m);
 
 void rsa_init(rsa_t *rsa);

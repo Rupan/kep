@@ -125,14 +125,15 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   em     : allocated storage for the encoded message
            must be at least ceil(emBits/8.0) bytes long
   emBits : the number of bits in the RSA modulus N
-  m      : the message to be signed
-
+  m      : the message to be signed, size is taken to be
+           the length of the message to be signed
   Return values:
    0     : success
   -1     : "encoding error"
+  -2     : insufficient output space in "em"
 */
 
-int32_t emsa_pss_encode(uint8_t *em, rsa_t *rsa, datum_t *m) {
+int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   uint32_t i, emBits, emLen, psLen, offset;
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], *p, *q;
@@ -140,6 +141,7 @@ int32_t emsa_pss_encode(uint8_t *em, rsa_t *rsa, datum_t *m) {
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( emBits % 8 > 0 ) emLen++;
+  if( emLen > em->size ) return -2;
 
   if( emLen < (2*HASH_DIGEST_SIZE + 2) )
     return -1;
@@ -163,7 +165,7 @@ int32_t emsa_pss_encode(uint8_t *em, rsa_t *rsa, datum_t *m) {
     return -1;
 
   /* DB = PS || 0x01 || salt */
-  q = em;
+  q = em->data;
   psLen = emLen - 2*HASH_DIGEST_SIZE - 2;
   for(i = 0; i < psLen; i++) q[i] = 0x00;
   q += psLen;
@@ -177,12 +179,12 @@ int32_t emsa_pss_encode(uint8_t *em, rsa_t *rsa, datum_t *m) {
   HASH_UPDATE(ctx, mp, sizeof(mp));
   HASH_FINISH(ctx, q);
 
-  apply_mask(em + offset, emLen - HASH_DIGEST_SIZE - 1 - offset, q, HASH_DIGEST_SIZE);
+  apply_mask(em->data + offset, emLen - HASH_DIGEST_SIZE - 1 - offset, q, HASH_DIGEST_SIZE);
   q += HASH_DIGEST_SIZE;
   *q = 0xbc;
 
   /* Set the leftmost 8 * emLen - emBits bits of the leftmost octet in maskedDB to zero */
-  em[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
+  em->data[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
 
   return 0;
 }

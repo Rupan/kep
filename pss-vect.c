@@ -28,7 +28,7 @@ int32_t fill_random(uint8_t *dst, uint32_t dlen) {
 int main(int argc, char **argv) {
   int ret;
   rsa_t rsa;
-  datum_t m;
+  datum_t em, m;
   uint8_t EM[256], SM[256];
 
   rsa_init(&rsa);
