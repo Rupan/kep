@@ -32,10 +32,8 @@ for(my $i = 1; $i <= 10; $i++) {
     print "  salt = ${base}_salt;\n";
     print "  m.data = (uint8_t *)${base}_plain;\n";
     print "  m.size = (uint32_t)sizeof(${base}_plain);\n";
-    print "  em.data = (uint8_t *)EM;\n";
-    print "  em.size = (uint32_t)sizeof(EM);\n";
     print "  emsa_pss_encode(&em, &rsa, &m);\n";
-    print "  ret = emsa_pss_verify(EM, &rsa, &m);\n";
+    print "  ret = emsa_pss_verify(&em, &rsa, &m);\n";
     print "  emsa_pss_encode(&em, &rsa, &m);\n";
     print "  rsasp1(SM, EM, &rsa);\n";
     print "  ret = memcmp(${base}_sig, SM, $bytes );\n";

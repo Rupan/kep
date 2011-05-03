@@ -203,9 +203,10 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   -4     : bad sentinel value after PS
   -3     : PS sentinel offset does not match dbLen
   -2     : computed hash H' does not match transmitted hash H
+  -1     : not enough space in em
 */
 
-int32_t emsa_pss_verify(uint8_t *em, rsa_t *rsa, datum_t *m) {
+int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   uint8_t mask;
   int32_t ret;
   uint32_t i, emBits, emLen, dbLen, offset;
@@ -216,6 +217,7 @@ int32_t emsa_pss_verify(uint8_t *em, rsa_t *rsa, datum_t *m) {
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( emBits % 8 != 0 ) emLen++;
+  if( em->size > emLen ) return -1;
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
@@ -225,16 +227,16 @@ int32_t emsa_pss_verify(uint8_t *em, rsa_t *rsa, datum_t *m) {
     offset = 0;
 
   mask = ( 0xFF >> ( 8 * emLen - emBits ) );
-  if( (em[0] & ~mask) != 0x00 || em[emLen-1] != 0xbc )
+  if( (em->data[0] & ~mask) != 0x00 || em->data[emLen-1] != 0xbc )
     ret |= 1;
 
   dbLen = (emLen - HASH_DIGEST_SIZE - 1);
-  apply_mask(em + offset, dbLen - offset, em + dbLen, HASH_DIGEST_SIZE);
-  em[0] &= mask;
-  q = em;
+  apply_mask(em->data + offset, dbLen - offset, em->data + dbLen, HASH_DIGEST_SIZE);
+  em->data[0] &= mask;
+  q = em->data;
   for(i = 0; *q == 0 && i < dbLen; i++) q++;
   if( *q++ != 0x01 ) ret |= 2;
-  if( (uint32_t)((q - em) + HASH_DIGEST_SIZE) != dbLen ) ret |= 4;
+  if( (uint32_t)((q - em->data) + HASH_DIGEST_SIZE) != dbLen ) ret |= 4;
 
   /* M' = (0x)00 00 00 00 00 00 00 00 || mHash || salt */
   p = mp;
@@ -252,7 +254,7 @@ int32_t emsa_pss_verify(uint8_t *em, rsa_t *rsa, datum_t *m) {
   HASH_UPDATE(ctx, mp, sizeof(mp));
   HASH_FINISH(ctx, hp);
 
-  q = em + dbLen;
+  q = em->data + dbLen;
   for(i = 0; i < HASH_DIGEST_SIZE; i++) {
     if( q[i] != hp[i] )
       ret |= 8;

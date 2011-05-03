@@ -33,6 +33,9 @@ int main(int argc, char **argv) {
 
   rsa_init(&rsa);
 
+  em.data = (uint8_t *)EM;
+  em.size = (uint32_t)sizeof(EM);
+
 /*
 generate these with gentests.pl
 NOTE: in some cases, the RSA signing operation will produce a signature which
