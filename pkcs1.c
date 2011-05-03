@@ -186,6 +186,7 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   /* Set the leftmost 8 * emLen - emBits bits of the leftmost octet in maskedDB to zero */
   em->data[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
 
+  rsasp1(em->data, em->data, rsa);
   return 0;
 }
 

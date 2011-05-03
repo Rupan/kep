@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
   int ret;
   rsa_t rsa;
   datum_t em, m;
-  uint8_t EM[256], SM[256];
+  uint8_t EM[256];
 
   rsa_init(&rsa);
 

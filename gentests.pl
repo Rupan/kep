@@ -33,10 +33,7 @@ for(my $i = 1; $i <= 10; $i++) {
     print "  m.data = (uint8_t *)${base}_plain;\n";
     print "  m.size = (uint32_t)sizeof(${base}_plain);\n";
     print "  emsa_pss_encode(&em, &rsa, &m);\n";
-    print "  ret = emsa_pss_verify(&em, &rsa, &m);\n";
-    print "  emsa_pss_encode(&em, &rsa, &m);\n";
-    print "  rsasp1(SM, EM, &rsa);\n";
-    print "  ret = memcmp(${base}_sig, SM, $bytes );\n";
+    print "  ret = memcmp(${base}_sig, EM, $bytes );\n";
     print "  if( ret != 0 ) {\n";
     print "    printf(\"FAILURE.  <---\\n\");\n";
     print "    printf(\"\\n\\n\");\n";
@@ -44,7 +41,7 @@ for(my $i = 1; $i <= 10; $i++) {
     print "    print_bytes(${base}_sig, sizeof(${base}_sig));\n";
     print "    printf(\"\\n\\n\");\n";
     print "    printf(\"Calculated signature:\\n\");\n";
-    print "    print_bytes(SM, $bytes);\n";
+    print "    print_bytes(EM, $bytes);\n";
     print "    printf(\"\\n\\n\");\n";
     print "  } else {\n";
     print "    printf(\"success.\\n\");\n";
