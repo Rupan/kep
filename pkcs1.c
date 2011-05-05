@@ -101,10 +101,17 @@ equal to the size of n in octets.
 signature: [output] storage where the message signature will be written
 message: content which must be signed (the EMSA-PSS encoded data chunk)
 */
-static void rsasp1(uint8_t *signature, uint8_t *message, rsa_t *rsa) {
+static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   uint32_t diff, i;
   mpz_t m, h, s, s1, s2;
   size_t ptbits, ptbytes, ctbits, ctbytes;
+
+  ptbits = mpz_sizeinbase(rsa->n, 2);
+  ptbytes = ptbits >> 3;
+  if( ptbits % 8 ) ptbytes++;
+  if( ptbytes > message->size ) {
+    return -1;
+  }
 
   mpz_init(m);
   mpz_init(h);
@@ -112,10 +119,7 @@ static void rsasp1(uint8_t *signature, uint8_t *message, rsa_t *rsa) {
   mpz_init(s1);
   mpz_init(s2);
 
-  ptbits = mpz_sizeinbase(rsa->n, 2);
-  ptbytes = ptbits >> 3;
-  if( ptbits % 8 ) ptbytes++;
-  mpz_import(m, ptbytes, 1, 1, 1, 0, message);
+  mpz_import(m, ptbytes, 1, 1, 1, 0, message->data);
 
   /**********************CRT*************************/
 
@@ -139,15 +143,25 @@ static void rsasp1(uint8_t *signature, uint8_t *message, rsa_t *rsa) {
   ctbits = mpz_sizeinbase(s, 2);
   ctbytes = ctbits >> 3;
   if( ctbits % 8 ) ctbytes++;
+  if( ctbytes > signature->size ) {
+    mpz_clear(s2);
+    mpz_clear(s1);
+    mpz_clear(s);
+    mpz_clear(h);
+    mpz_clear(m);
+    return -1;
+  }
   diff = ptbytes-ctbytes;
-  for(i = 0; i < diff; i++) signature[i] = 0;
-  mpz_export(signature+diff, NULL, 1, 1, 1, 0, s);
+  for(i = 0; i < diff; i++) signature->data[i] = 0;
+  mpz_export(signature->data+diff, NULL, 1, 1, 1, 0, s);
 
   mpz_clear(s2);
   mpz_clear(s1);
   mpz_clear(s);
   mpz_clear(h);
   mpz_clear(m);
+
+  return 0;
 }
 
 /*
@@ -267,7 +281,7 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   /* Set the leftmost 8 * emLen - emBits bits of the leftmost octet in maskedDB to zero */
   em->data[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
 
-  rsasp1(em->data, em->data, rsa);
+  if( rsasp1(em, em, rsa) < 0 ) return -2;
   return 0;
 }
 
