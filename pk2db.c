@@ -16,12 +16,14 @@ typedef struct _datum_t {
   uint32_t size;
 } datum_t;
 
+const char *make_private = "CREATE TABLE IF NOT EXISTS private ( name TEXT PRIMARY KEY NOT NULL, n BLOB NOT NULL, e BLOB NOT NULL, d BLOB NOT NULL, p BLOB NOT NULL, q BLOB NOT NULL, dp BLOB NOT NULL, dq BLOB NOT NULL, qinv BLOB NOT NULL );";
+
 int main(int argc, char **argv) {
   int rc, i;
   RSA *pk;
   FILE *fp;
   sqlite3 *db;
-  char fn[128];
+  char fn[128], *err;
   datum_t pk_bin[8];
   unsigned char buf[8][1024];
 
@@ -81,6 +83,12 @@ int main(int argc, char **argv) {
     sqlite3_close(db);
     printf("Unable to open SQLite database.\n");
     return -1;
+  }
+
+  rc = sqlite3_exec(db, make_private, NULL, 0, &err);
+  if( rc != SQLITE_OK ) {
+    fprintf(stderr, "SQL error [%s]\n", err);
+    sqlite3_free(err);
   }
 
   RSA_free(pk);
