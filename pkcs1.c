@@ -93,6 +93,64 @@ static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t sle
 }
 
 /*
+RSA signature primitive 1, using the Chinese Remainder Theorem
+
+The storage sizes of the message and the signature are assumed to be
+equal to the size of n in octets.
+
+signature: [output] storage where the message signature will be written
+message: content which must be signed (the EMSA-PSS encoded data chunk)
+*/
+static void rsasp1(uint8_t *signature, uint8_t *message, rsa_t *rsa) {
+  uint32_t diff, i;
+  mpz_t m, h, s, s1, s2;
+  size_t ptbits, ptbytes, ctbits, ctbytes;
+
+  mpz_init(m);
+  mpz_init(h);
+  mpz_init(s);
+  mpz_init(s1);
+  mpz_init(s2);
+
+  ptbits = mpz_sizeinbase(rsa->n, 2);
+  ptbytes = ptbits >> 3;
+  if( ptbits % 8 ) ptbytes++;
+  mpz_import(m, ptbytes, 1, 1, 1, 0, message);
+
+  /**********************CRT*************************/
+
+  mpz_powm(s1, m, rsa->dmp1, rsa->p);
+  mpz_powm(s2, m, rsa->dmq1, rsa->q);
+
+  if( mpz_cmp(s1, s2) < 0 )
+    mpz_add(s1, s1, rsa->p);
+  mpz_sub(h, s1, s2);
+  mpz_mul(h, h, rsa->iqmp);
+  mpz_mod(h, h, rsa->p);
+
+  mpz_mul(s, rsa->q, h);
+  mpz_add(s, s, s2);
+
+  /* We can also calculate s the traditional way: */
+  /* mpz_powm(s, m, rsa->d, rsa->n); */
+
+  /**************************************************/
+
+  ctbits = mpz_sizeinbase(s, 2);
+  ctbytes = ctbits >> 3;
+  if( ctbits % 8 ) ctbytes++;
+  diff = ptbytes-ctbytes;
+  for(i = 0; i < diff; i++) signature[i] = 0;
+  mpz_export(signature+diff, NULL, 1, 1, 1, 0, s);
+
+  mpz_clear(s2);
+  mpz_clear(s1);
+  mpz_clear(s);
+  mpz_clear(h);
+  mpz_clear(m);
+}
+
+/*
 Read ciphertext from the signature, write plaintext to the message
 [decrypted using the RSA key in rsa]
 signature and message may be equal, if there is enough writable space.
@@ -289,60 +347,3 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   return ret;
 }
 
-/*
-RSA signature primitive 1, using the Chinese Remainder Theorem
-
-The storage sizes of the message and the signature are assumed to be
-equal to the size of n in octets.
-
-signature: [output] storage where the message signature will be written
-message: content which must be signed (the EMSA-PSS encoded data chunk)
-*/
-void rsasp1(uint8_t *signature, uint8_t *message, rsa_t *rsa) {
-  uint32_t diff, i;
-  mpz_t m, h, s, s1, s2;
-  size_t ptbits, ptbytes, ctbits, ctbytes;
-
-  mpz_init(m);
-  mpz_init(h);
-  mpz_init(s);
-  mpz_init(s1);
-  mpz_init(s2);
-
-  ptbits = mpz_sizeinbase(rsa->n, 2);
-  ptbytes = ptbits >> 3;
-  if( ptbits % 8 ) ptbytes++;
-  mpz_import(m, ptbytes, 1, 1, 1, 0, message);
-
-  /**********************CRT*************************/
-
-  mpz_powm(s1, m, rsa->dmp1, rsa->p);
-  mpz_powm(s2, m, rsa->dmq1, rsa->q);
-
-  if( mpz_cmp(s1, s2) < 0 )
-    mpz_add(s1, s1, rsa->p);
-  mpz_sub(h, s1, s2);
-  mpz_mul(h, h, rsa->iqmp);
-  mpz_mod(h, h, rsa->p);
-
-  mpz_mul(s, rsa->q, h);
-  mpz_add(s, s, s2);
-
-  /* We can also calculate s the traditional way: */
-  /* mpz_powm(s, m, rsa->d, rsa->n); */
-
-  /**************************************************/
-
-  ctbits = mpz_sizeinbase(s, 2);
-  ctbytes = ctbits >> 3;
-  if( ctbits % 8 ) ctbytes++;
-  diff = ptbytes-ctbytes;
-  for(i = 0; i < diff; i++) signature[i] = 0;
-  mpz_export(signature+diff, NULL, 1, 1, 1, 0, s);
-
-  mpz_clear(s2);
-  mpz_clear(s1);
-  mpz_clear(s);
-  mpz_clear(h);
-  mpz_clear(m);
-}
