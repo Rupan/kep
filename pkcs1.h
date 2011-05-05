@@ -1,5 +1,7 @@
-#ifndef _EMSA_PSS_H
-#define _EMSA_PSS_H
+#ifndef _PKCS1_H
+#define _PKCS1_H
+
+#include <gmp.h>
 
 typedef struct _rsa_t {
   mpz_t n;      /* public modulus */
@@ -23,4 +25,4 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m);
 void rsa_init(rsa_t *rsa);
 void rsa_free(rsa_t *rsa);
 
-#endif /* _EMSA_PSS_H */
+#endif /* _PKCS1_H */
