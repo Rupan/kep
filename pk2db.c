@@ -8,6 +8,7 @@ This might be useful on e.g. Android, for the KEP subroutines.
 #include <sqlite3.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
+#include <openssl/bn.h>
 
 int main(int argc, char **argv) {
   int rc;
@@ -15,6 +16,7 @@ int main(int argc, char **argv) {
   FILE *fp;
   sqlite3 *db;
   char fn[128];
+  unsigned char buf[1024];
 
   if( argc != 2 ) {
     printf("Specify a base name.\n");
@@ -43,8 +45,14 @@ int main(int argc, char **argv) {
   snprintf(fn, sizeof(fn), "%s.db", argv[1]);
   rc = sqlite3_open(fn, &db);
   if( rc != SQLITE_OK ) {
+    sqlite3_close(db);
     printf("Unable to open SQLite database.\n");
     return -1;
+  }
+
+  rc = BN_num_bytes(pk->n);
+  if( rc < (int)sizeof(buf) ) {
+    rc = BN_bn2bin(pk->n, buf);
   }
 
   RSA_free(pk);
