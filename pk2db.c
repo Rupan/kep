@@ -5,18 +5,25 @@ This might be useful on e.g. Android, for the KEP subroutines.
 */
 
 #include <stdio.h>
+#include <inttypes.h>
 #include <sqlite3.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
 
+typedef struct _datum_t {
+  uint8_t *data;
+  uint32_t size;
+} datum_t;
+
 int main(int argc, char **argv) {
-  int rc;
+  int rc, i;
   RSA *pk;
   FILE *fp;
   sqlite3 *db;
   char fn[128];
-  unsigned char buf[1024];
+  datum_t pk_bin[8];
+  unsigned char buf[8][1024];
 
   if( argc != 2 ) {
     printf("Specify a base name.\n");
@@ -41,6 +48,32 @@ int main(int argc, char **argv) {
   }
   fclose(fp);
 
+  for(i=0; i<8; i++)
+    pk_bin[i].data = buf[i];
+
+  pk_bin[0].size = BN_num_bytes(pk->n);
+  if( pk_bin[0].size > 1024 ) {
+    printf("Private key too large.\n");
+    RSA_free(pk);
+    sqlite3_close(db);
+    return -1;
+  }
+  BN_bn2bin(pk->n, pk_bin[0].data);
+  pk_bin[1].size = BN_num_bytes(pk->e);
+  BN_bn2bin(pk->e, pk_bin[1].data);
+  pk_bin[2].size = BN_num_bytes(pk->d);
+  BN_bn2bin(pk->d, pk_bin[2].data);
+  pk_bin[3].size = BN_num_bytes(pk->p);
+  BN_bn2bin(pk->p, pk_bin[3].data);
+  pk_bin[4].size = BN_num_bytes(pk->q);
+  BN_bn2bin(pk->q, pk_bin[4].data);
+  pk_bin[5].size = BN_num_bytes(pk->dmp1);
+  BN_bn2bin(pk->dmp1, pk_bin[5].data);
+  pk_bin[6].size = BN_num_bytes(pk->dmq1);
+  BN_bn2bin(pk->dmq1, pk_bin[6].data);
+  pk_bin[7].size = BN_num_bytes(pk->iqmp);
+  BN_bn2bin(pk->iqmp, pk_bin[7].data);
+
   /* open a corresponding sqlite database */
   snprintf(fn, sizeof(fn), "%s.db", argv[1]);
   rc = sqlite3_open(fn, &db);
@@ -48,11 +81,6 @@ int main(int argc, char **argv) {
     sqlite3_close(db);
     printf("Unable to open SQLite database.\n");
     return -1;
-  }
-
-  rc = BN_num_bytes(pk->n);
-  if( rc < (int)sizeof(buf) ) {
-    rc = BN_bn2bin(pk->n, buf);
   }
 
   RSA_free(pk);
