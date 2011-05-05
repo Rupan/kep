@@ -94,12 +94,17 @@ static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t sle
 
 static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   int ret;
-  uint32_t mBits, mBytes, diff, i;
   mpz_t s, m;
+  uint32_t ctBits, ctBytes, ptBits, ptBytes, diff, i;
 
   mpz_init(s);
   mpz_init(m);
-  mpz_import(s, signature->size, 1, 1, 1, 0, signature->data);
+
+  ctBits = mpz_sizeinbase(rsa->n, 2);
+  ctBytes = ctBits >> 3;
+  if( ctBits % 8 ) ctBytes++;
+  if( ctBytes > signature->size ) return -1;
+  mpz_import(s, ctBytes, 1, 1, 1, 0, signature->data);
   ret = mpz_cmp(s, rsa->n);
   /* "signature representative out of range" */
   if(ret >= 0 ) {
@@ -108,12 +113,12 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
     return -1;
   }
   mpz_powm(m, s, rsa->e, rsa->n);
-  mBits = mpz_sizeinbase(m, 2);
-  mBytes = mBits >> 3;
-  if( mBits % 8 ) mBytes++;
-  diff = signature->size - mBytes;
-  for(i = 0; i < diff; i++) message->data[i] = 0;
-  mpz_export(message->data+diff, NULL, 1, 1, 1, 0, m);
+  ptBits = mpz_sizeinbase(m, 2);
+  ptBytes = ptBits >> 3;
+  if( ptBits % 8 ) ptBytes++;
+  diff = ctBytes - ptBytes;
+  for(i = 0; i < diff; i++) signature->data[i] = 0;
+  mpz_export(signature->data+diff, NULL, 1, 1, 1, 0, m);
   mpz_clear(m);
   mpz_clear(s);
   return 0;
@@ -214,11 +219,14 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
+  ret = rsavp1(em, m, rsa);
+  if( ret < 0 ) return -500;
+
   ret = 0;
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( emBits % 8 != 0 ) emLen++;
-  if( em->size > emLen ) return -1;
+  if( em->size > emLen ) return -400;
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
