@@ -92,6 +92,15 @@ static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t sle
   }
 }
 
+/*
+Read ciphertext from the signature, write plaintext to the message
+[decrypted using the RSA key in rsa]
+signature and message may be equal, if there is enough writable space.
+Returns -1 in case of insufficient memory or out of range
+
+signature: the encrypted (signed) data to be decrypted
+message: [output] storage for the decrypted data, EMSA-PSS encoded
+*/
 static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   int ret;
   mpz_t s, m;
@@ -103,7 +112,11 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   ctBits = mpz_sizeinbase(rsa->n, 2);
   ctBytes = ctBits >> 3;
   if( ctBits % 8 ) ctBytes++;
-  if( ctBytes > signature->size ) return -1;
+  if( ctBytes > signature->size ) {
+    mpz_clear(m);
+    mpz_clear(s);
+    return -1;
+  }
   mpz_import(s, ctBytes, 1, 1, 1, 0, signature->data);
   ret = mpz_cmp(s, rsa->n);
   /* "signature representative out of range" */
@@ -115,10 +128,15 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_powm(m, s, rsa->e, rsa->n);
   ptBits = mpz_sizeinbase(m, 2);
   ptBytes = ptBits >> 3;
+  if( ptBytes > message->size ) {
+    mpz_clear(m);
+    mpz_clear(s);
+    return -1;
+  }
   if( ptBits % 8 ) ptBytes++;
   diff = ctBytes - ptBytes;
-  for(i = 0; i < diff; i++) signature->data[i] = 0;
-  mpz_export(signature->data+diff, NULL, 1, 1, 1, 0, m);
+  for(i = 0; i < diff; i++) message->data[i] = 0;
+  mpz_export(message->data+diff, NULL, 1, 1, 1, 0, m);
   mpz_clear(m);
   mpz_clear(s);
   return 0;
@@ -219,14 +237,14 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
-  ret = rsavp1(em, m, rsa);
-  if( ret < 0 ) return -500;
+  ret = rsavp1(em, em, rsa);
+  if( ret < 0 ) return -1;
 
   ret = 0;
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( emBits % 8 != 0 ) emLen++;
-  if( em->size > emLen ) return -400;
+  if( emLen > em->size ) return -1;
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
@@ -274,8 +292,11 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
 /*
 RSA signature primitive 1, using the Chinese Remainder Theorem
 
-The storage sizes of the mesasge and the signature are assumed to be
+The storage sizes of the message and the signature are assumed to be
 equal to the size of n in octets.
+
+signature: [output] storage where the message signature will be written
+message: content which must be signed (the EMSA-PSS encoded data chunk)
 */
 void rsasp1(uint8_t *signature, uint8_t *message, rsa_t *rsa) {
   uint32_t diff, i;
