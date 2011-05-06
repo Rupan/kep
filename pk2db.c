@@ -101,13 +101,10 @@ int main(int argc, char **argv) {
     sqlite3_bind_blob(stmt, i+2, pk_bin[0].data, pk_bin[0].size, SQLITE_TRANSIENT);
   if( sqlite3_step( stmt ) != SQLITE_DONE)
     printf("Unable to import RSA key (%s); a unique name must be provided.\n", sqlite3_errmsg(db));
-  sqlite3_finalize(stmt);
-
-  /*
-  FIXME: memory leak above
   sqlite3_clear_bindings(stmt);
   sqlite3_reset(stmt);
-  */
+  sqlite3_finalize(stmt);
+
   RSA_free(pk);
   sqlite3_close(db);
 
