@@ -17,22 +17,22 @@ typedef struct _datum_t {
   uint32_t size;
 } datum_t;
 
-const char *make_private = "CREATE TABLE IF NOT EXISTS private ( name TEXT PRIMARY KEY ASC NOT NULL, n BLOB NOT NULL, e BLOB NOT NULL, d BLOB NOT NULL, p BLOB NOT NULL, q BLOB NOT NULL, dp BLOB NOT NULL, dq BLOB NOT NULL, qinv BLOB NOT NULL );";
-const char *add_private  = "INSERT INTO private (name, n, e, d, p, q, dp, dq, qinv) VALUES (?,?,?,?,?,?,?,?,?);";
+const char *add_tbl = "CREATE TABLE IF NOT EXISTS private_key ( name TEXT PRIMARY KEY ASC NOT NULL, n BLOB NOT NULL, e BLOB NOT NULL, d BLOB NOT NULL, p BLOB NOT NULL, q BLOB NOT NULL, dp BLOB NOT NULL, dq BLOB NOT NULL, qinv BLOB NOT NULL );";
+const char *add_key = "INSERT INTO private_key (name, n, e, d, p, q, dp, dq, qinv) VALUES (?,?,?,?,?,?,?,?,?);";
 
 int main(int argc, char **argv) {
   int rc, i;
   RSA *pk;
   FILE *fp;
   sqlite3 *db;
-  char fn[128], *err;
+  char *err;
   const char *tail;
   datum_t pk_bin[8];
   sqlite3_stmt *stmt;
   unsigned char buf[8][1024];
 
-  if( argc != 2 ) {
-    printf("Specify a base name.\n");
+  if( argc != 4 ) {
+    printf("Usage: %s <key> <database> <name>\n", argv[0]);
     return -1;
   }
 
@@ -40,8 +40,7 @@ int main(int argc, char **argv) {
      parse the given PEM key, from e.g.
      openssl genrsa -out testkey.pem 2048
   */
-  snprintf(fn, sizeof(fn), "%s.pem", argv[1]);
-  fp = fopen(fn, "r");
+  fp = fopen(argv[1], "r");
   if( fp == NULL ) {
     printf("Unable to open PEM file for reading.\n");
     return -1;
@@ -59,7 +58,7 @@ int main(int argc, char **argv) {
 
   pk_bin[0].size = BN_num_bytes(pk->n);
   if( pk_bin[0].size > 1024 ) {
-    printf("Private key too large.\n");
+    printf("Private key too large (8192 bits max).\n");
     RSA_free(pk);
     sqlite3_close(db);
     return -1;
@@ -80,32 +79,37 @@ int main(int argc, char **argv) {
   pk_bin[7].size = BN_num_bytes(pk->iqmp);
   BN_bn2bin(pk->iqmp, pk_bin[7].data);
 
-  /* open a corresponding sqlite database */
-  snprintf(fn, sizeof(fn), "%s.db", argv[1]);
-  rc = sqlite3_open(fn, &db);
+  RSA_free(pk);
+
+  /* open & update the specified sqlite database */
+  rc = sqlite3_open(argv[2], &db);
   if( rc != SQLITE_OK ) {
     sqlite3_close(db);
     printf("Unable to open SQLite database.\n");
     return -1;
   }
 
-  rc = sqlite3_exec(db, make_private, NULL, NULL, &err);
+  rc = sqlite3_exec(db, add_tbl, NULL, NULL, &err);
   if( rc != SQLITE_OK ) {
     fprintf(stderr, "Failed to initialize 'private' table [%s]\n", err);
     sqlite3_free(err);
+    sqlite3_close(db);
+    return -1;
   }
 
-  sqlite3_prepare_v2(db, add_private, strlen(add_private)+1, &stmt, &tail);
-  sqlite3_bind_text(stmt, 1, argv[1], strlen(argv[1]), SQLITE_TRANSIENT);
+  rc = 0;
+  sqlite3_prepare_v2(db, add_key, strlen(add_key)+1, &stmt, &tail);
+  sqlite3_bind_text(stmt, 1, argv[3], strlen(argv[3]), SQLITE_TRANSIENT);
   for(i=0; i<8; i++)
-    sqlite3_bind_blob(stmt, i+2, pk_bin[0].data, pk_bin[0].size, SQLITE_TRANSIENT);
-  if( sqlite3_step( stmt ) != SQLITE_DONE)
+    sqlite3_bind_blob(stmt, i+2, pk_bin[i].data, pk_bin[i].size, SQLITE_TRANSIENT);
+  if( sqlite3_step(stmt) != SQLITE_DONE ) {
     printf("Unable to import RSA key (%s); a unique name must be provided.\n", sqlite3_errmsg(db));
+    rc = 1;
+  }
   sqlite3_clear_bindings(stmt);
   sqlite3_reset(stmt);
   sqlite3_finalize(stmt);
 
-  RSA_free(pk);
   sqlite3_close(db);
 
   return 0;
