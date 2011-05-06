@@ -18,14 +18,15 @@ typedef struct _datum_t {
 } datum_t;
 
 const char *make_private = "CREATE TABLE IF NOT EXISTS private ( name TEXT PRIMARY KEY ASC NOT NULL, n BLOB NOT NULL, e BLOB NOT NULL, d BLOB NOT NULL, p BLOB NOT NULL, q BLOB NOT NULL, dp BLOB NOT NULL, dq BLOB NOT NULL, qinv BLOB NOT NULL );";
-const char *add_private  = "INSERT INTO private (n, e, d, p, q, dp, dq, qinv) VALUES (?,?,?,?,?,?,?,?);";
+const char *add_private  = "INSERT INTO private (name, n, e, d, p, q, dp, dq, qinv) VALUES (?,?,?,?,?,?,?,?,?);";
 
 int main(int argc, char **argv) {
   int rc, i;
   RSA *pk;
   FILE *fp;
   sqlite3 *db;
-  char fn[128], *err, *tail;
+  char fn[128], *err;
+  const char *tail;
   datum_t pk_bin[8];
   sqlite3_stmt *stmt;
   unsigned char buf[8][1024];
@@ -95,12 +96,18 @@ int main(int argc, char **argv) {
   }
 
   sqlite3_prepare_v2(db, add_private, strlen(add_private)+1, &stmt, &tail);
+  sqlite3_bind_text(stmt, 1, argv[1], strlen(argv[1]), SQLITE_TRANSIENT);
   for(i=0; i<8; i++)
-    sqlite3_bind_blob(stmt, i+1, pk_bin[0].data, pk_bin[0].size, SQLITE_TRANSIENT);
+    sqlite3_bind_blob(stmt, i+2, pk_bin[0].data, pk_bin[0].size, SQLITE_TRANSIENT);
   if( sqlite3_step( stmt ) != SQLITE_DONE)
-    printf("statement error: %s\n", sqlite3_errmsg(db));
+    printf("Unable to import RSA key (%s); a unique name must be provided.\n", sqlite3_errmsg(db));
   sqlite3_finalize(stmt);
 
+  /*
+  FIXME: memory leak above
+  sqlite3_clear_bindings(stmt);
+  sqlite3_reset(stmt);
+  */
   RSA_free(pk);
   sqlite3_close(db);
 
