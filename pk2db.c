@@ -16,7 +16,7 @@ typedef struct _datum_t {
   uint32_t size;
 } datum_t;
 
-const char *make_private = "CREATE TABLE IF NOT EXISTS private ( name TEXT PRIMARY KEY NOT NULL, n BLOB NOT NULL, e BLOB NOT NULL, d BLOB NOT NULL, p BLOB NOT NULL, q BLOB NOT NULL, dp BLOB NOT NULL, dq BLOB NOT NULL, qinv BLOB NOT NULL );";
+const char *make_private = "CREATE TABLE IF NOT EXISTS private ( name TEXT PRIMARY KEY ASC NOT NULL, n BLOB NOT NULL, e BLOB NOT NULL, d BLOB NOT NULL, p BLOB NOT NULL, q BLOB NOT NULL, dp BLOB NOT NULL, dq BLOB NOT NULL, qinv BLOB NOT NULL );";
 
 int main(int argc, char **argv) {
   int rc, i;
