@@ -1,0 +1,4 @@
+These are PEM-encoded versions of the RSA keys in the EMSA-PSS test vectors file.
+
+Verify them like this:
+for x in *.pem; do echo -n "Verifying ${x}: "; openssl rsa -in ${x} -noout -check; done
