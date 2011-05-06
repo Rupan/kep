@@ -65,10 +65,10 @@ void rsa_free(rsa_t *rsa) {
   mpz_clear(rsa->iqmp);
 }
 
-/* this function must be defined: it writes dlen bytes to dst */
+/* this function must be defined by the caller: it writes dlen random bytes to dst */
 int32_t fill_random(uint8_t *dst, uint32_t dlen);
 
-/* this function implements MGF1 */
+/* private: this function implements MGF1 */
 static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t slen) {
   HASH_CONTEXT ctx[1];
   uint32_t i, j, outlen, tmp, ibe;
@@ -93,13 +93,15 @@ static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t sle
 }
 
 /*
-RSA signature primitive 1, using the Chinese Remainder Theorem
+private: RSA signature primitive 1, using the Chinese Remainder Theorem
 
-The storage sizes of the message and the signature are assumed to be
-equal to the size of n in octets.
+Purpose: encrypt a message with an RSA private key and write out its signature
+Notes: signature and message may be equal, if there is enough writable space.
+Returns: -1 on error, 0 on success
 
+Parameters:
 signature: [output] storage where the message signature will be written
-message: content which must be signed (the EMSA-PSS encoded data chunk)
+message: [input] content which must be signed (an EMSA-PSS encoded data chunk)
 */
 static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   uint32_t diff, i;
@@ -165,13 +167,15 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 }
 
 /*
-Read ciphertext from the signature, write plaintext to the message
-[decrypted using the RSA key in rsa]
-signature and message may be equal, if there is enough writable space.
-Returns -1 in case of insufficient memory or out of range
+private: RSA verification primitive 1
 
-signature: the encrypted (signed) data to be decrypted
-message: [output] storage for the decrypted data, EMSA-PSS encoded
+Purpose: decrypt a signature with an RSA public key and write out its message
+Notes: signature and message may be equal, if there is enough writable space.
+Returns: -1 on error, 0 on success
+
+Parameters:
+signature: [input] the encrypted (signed) data to be decrypted
+message: [output] storage for the decrypted data (an EMSA-PSS encoded data chunk)
 */
 static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   int ret;
@@ -215,13 +219,15 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 }
 
 /*
-  emsa_pss_encode: Perform EMSA-PSS signature padding (PKCS#1 v2.1)
+  public: emsa_pss_encode: Perform EMSA-PSS signature padding (PKCS#1 v2.1)
 
-  em     : allocated storage for the encoded message
+  em     : [output] allocated storage for the message signature
            must be at least ceil(emBits/8.0) bytes long
-  emBits : the number of bits in the RSA modulus N
-  m      : the message to be signed, size is taken to be
-           the length of the message to be signed
+  rsa    : [input] an allocated RSA private key with all fields filled in
+           Specifically, all values for the CRT algorithm must be correct
+  m      : [input] the message to be signed, size value used as message length
+
+  Notes  : produced signature will be equal to octet length of rsa->n
   Return values:
    0     : success
   -1     : "encoding error"
@@ -286,20 +292,22 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
 }
 
 /*
-  em     - encoded message, an octet string
-  emBits - maximal bit length of the integer OS2IP(EM)
-  m      - message to be verified, an octet string
-  mBytes - length of m in octets
+  public: emsa_pss_verify: Perform EMSA-PSS signature verification (PKCS#1 v2.1)
 
-  This function will overwrite em.
+  em     : encoded message, an octet string
+  rsa    : an allocated RSA public key corresponding to the message signer
+  m      : message to be verified, an octet string
+
+  Notes: This function will overwrite the contents of em.
 
   Return values:
    0     : success
-  -5     : bad first or last bytes
-  -4     : bad sentinel value after PS
-  -3     : PS sentinel offset does not match dbLen
-  -2     : computed hash H' does not match transmitted hash H
-  -1     : not enough space in em
+   1     : fatal error during initialization
+  or a bit mask containing:
+   2     : bad first or last bytes
+   4     : bad sentinel value after PS
+   8     : PS sentinel offset does not match dbLen
+  16     : computed hash H' does not match transmitted hash H
 */
 
 int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
@@ -310,13 +318,13 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
   ret = rsavp1(em, em, rsa);
-  if( ret < 0 ) return -1;
+  if( ret < 0 ) return 1;
 
   ret = 0;
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( emBits % 8 != 0 ) emLen++;
-  if( emLen > em->size ) return -1;
+  if( emLen > em->size ) return 1;
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
@@ -327,15 +335,15 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
 
   mask = ( 0xFF >> ( 8 * emLen - emBits ) );
   if( (em->data[0] & ~mask) != 0x00 || em->data[emLen-1] != 0xbc )
-    ret |= 1;
+    ret |= 2;
 
   dbLen = (emLen - HASH_DIGEST_SIZE - 1);
   apply_mask(em->data + offset, dbLen - offset, em->data + dbLen, HASH_DIGEST_SIZE);
   em->data[0] &= mask;
   q = em->data;
   for(i = 0; *q == 0 && i < dbLen; i++) q++;
-  if( *q++ != 0x01 ) ret |= 2;
-  if( (uint32_t)((q - em->data) + HASH_DIGEST_SIZE) != dbLen ) ret |= 4;
+  if( *q++ != 0x01 ) ret |= 4;
+  if( (uint32_t)((q - em->data) + HASH_DIGEST_SIZE) != dbLen ) ret |= 8;
 
   /* M' = (0x)00 00 00 00 00 00 00 00 || mHash || salt */
   p = mp;
@@ -356,7 +364,7 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   q = em->data + dbLen;
   for(i = 0; i < HASH_DIGEST_SIZE; i++) {
     if( q[i] != hp[i] )
-      ret |= 8;
+      ret |= 16;
   }
   return ret;
 }
