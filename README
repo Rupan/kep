@@ -10,3 +10,9 @@ Not doing so could result in keys leaking to swap.
 
 In the future, this library may implement custom allocation for GMP:
   http://www.gnu.org/software/gmp/manual/html_mono/gmp.html#Custom%20Allocation
+
+TODO:
+-pass a function pointer for fill_random to emsa_pss_encode
+-hopefully, run a buildbot to test new revisions
+-add a fuzzer that throws random data at emsa_pss_* code
+ (to find any buffer overflows or other errors)
