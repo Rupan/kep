@@ -2,8 +2,9 @@
 
 if [ -e sha1.o ]
 then
+  rm -f ./vectors
   ./gentests.pl > tests.c
-  gcc -O0 -g -Wall -Wextra -pedantic -DUSE_SHA1 pkcs1.c pss-vect.c sha1.o -o vectors -lgmp
+  gcc -O0 -g -Wall -Wextra -pedantic -DUSE_SHA1 pkcs1.c pss-vect.c sha1.o -o vectors -lgmp && ./vectors
 else
   echo "SHA1 code not present, skipping verification of EMSA-PSS test vectors"
 fi

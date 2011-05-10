@@ -22,22 +22,26 @@
 #include <inttypes.h>
 #include <gmp.h>
 #include "pkcs1.h"
+#include "brg-sha.h"
 
 #if defined(USE_SHA1)
-#include "brg-sha.h"
 #define HASH_DIGEST_SIZE 20
 #define HASH_CONTEXT sha1_ctx
 #define HASH_STARTS(ctx) sha1_begin(ctx)
 #define HASH_UPDATE(ctx, input, ilen) sha1_hash((input), (ilen), (ctx))
 #define HASH_FINISH(ctx, output) sha1_end((output), (ctx))
 #else
-#include "brg-sha.h"
 #define HASH_DIGEST_SIZE 32
 #define HASH_CONTEXT sha256_ctx
 #define HASH_STARTS(ctx) sha256_begin(ctx)
 #define HASH_UPDATE(ctx, input, ilen) sha256_hash((input), (ilen), (ctx))
 #define HASH_FINISH(ctx, output) sha256_end((output), (ctx))
 #endif
+
+typedef union _icp_cast_t {
+  uint32_t i;
+  uint8_t c[4];
+} icp_cast_t;
 
 void rsa_init(rsa_t *rsa) {
   mpz_init(rsa->n);
@@ -67,15 +71,16 @@ int32_t fill_random(uint8_t *dst, uint32_t dlen);
 /* private: this function implements MGF1 */
 static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t slen) {
   HASH_CONTEXT ctx[1];
-  uint32_t i, j, outlen, tmp, ibe;
+  icp_cast_t ibe;
+  uint32_t i, j, outlen, tmp;
   uint8_t md[HASH_DIGEST_SIZE];
 
   outlen = 0;
   for(i=0; outlen < mlen; i++) {
-    ibe = (uint32_t)htobe32((unsigned int)i); /* I2OSP */
+    ibe.i = htobe32(i); /* I2OSP */
     HASH_STARTS(ctx);
     HASH_UPDATE(ctx, seed, slen);
-    HASH_UPDATE(ctx, (uint8_t *)&ibe, 4);
+    HASH_UPDATE(ctx, ibe.c, 4);
     HASH_FINISH(ctx, md);
     if(outlen + HASH_DIGEST_SIZE <= mlen) {
       for(j = 0; j < HASH_DIGEST_SIZE; j++)
