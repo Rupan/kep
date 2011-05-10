@@ -23,10 +23,6 @@
 #include <gmp.h>
 #include "pkcs1.h"
 
-#ifndef BYTE_ORDER
-#error The platform byte order is not defined, please fix it.
-#endif
-
 #if defined(USE_SHA1)
 #include "brg-sha.h"
 #define HASH_DIGEST_SIZE 20
