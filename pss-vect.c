@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <sys/mman.h>
 #include <gmp.h>
 #include "pkcs1.h"
 #include "pss-vect.h"
@@ -49,6 +50,8 @@ int main(int argc, char **argv) {
   datum_t em, m;
   uint8_t EM[256];
 
+  mlockall(MCL_CURRENT|MCL_FUTURE);
+
   rsa_init(&rsa);
 
   em.data = (uint8_t *)EM;
@@ -63,6 +66,8 @@ on the left with zeros.
 #include "tests.c"
 
   rsa_free(&rsa);
+
+  munlockall();
 
   return 0;
 }
