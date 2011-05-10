@@ -110,7 +110,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 
   ptbits = mpz_sizeinbase(rsa->n, 2);
   ptbytes = ptbits >> 3;
-  if( ptbits % 8 ) ptbytes++;
+  if( (ptbits & 7) != 0 ) ptbytes++;
   if( ptbytes > message->size ) {
     return -1;
   }
@@ -144,7 +144,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 
   ctbits = mpz_sizeinbase(s, 2);
   ctbytes = ctbits >> 3;
-  if( ctbits % 8 ) ctbytes++;
+  if( (ctbits & 7) != 0 ) ctbytes++;
   if( ctbytes > signature->size ) {
     mpz_clear(s2);
     mpz_clear(s1);
@@ -187,7 +187,7 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 
   ctBits = mpz_sizeinbase(rsa->n, 2);
   ctBytes = ctBits >> 3;
-  if( ctBits % 8 ) ctBytes++;
+  if( (ctBits & 7) != 0 ) ctBytes++;
   if( ctBytes > signature->size ) {
     mpz_clear(m);
     mpz_clear(s);
@@ -209,7 +209,7 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
     mpz_clear(s);
     return -1;
   }
-  if( ptBits % 8 ) ptBytes++;
+  if( (ptBits & 7) != 0 ) ptBytes++;
   diff = ctBytes - ptBytes;
   for(i = 0; i < diff; i++) message->data[i] = 0;
   mpz_export(message->data+diff, NULL, 1, 1, 1, 0, m);
@@ -241,7 +241,7 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
 
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
-  if( emBits % 8 > 0 ) emLen++;
+  if( (emBits & 7) != 0 ) emLen++;
   if( emLen > em->size ) return -2;
 
   if( emLen < (2*HASH_DIGEST_SIZE + 2) )
@@ -249,7 +249,7 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
-  if( emBits % 8 == 0 )
+  if( (emBits & 7) == 0 )
     offset = 1;
   else
     offset = 0;
@@ -323,12 +323,12 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   ret = 0;
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
-  if( emBits % 8 != 0 ) emLen++;
+  if( (emBits & 7) != 0 ) emLen++;
   if( emLen > em->size ) return 1;
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
-  if( emBits % 8 == 0 )
+  if( (emBits & 7) == 0 )
     offset = 1;
   else
     offset = 0;
