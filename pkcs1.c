@@ -16,6 +16,14 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/* for fill_random */
+#if !defined(TEST_VECTORS)
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#endif /* TEST_VECTORS */
+
 /* for apply_mask */
 #include <endian.h>
 #include <string.h>
@@ -65,8 +73,30 @@ void rsa_free(rsa_t *rsa) {
   mpz_clear(rsa->iqmp);
 }
 
-/* this function must be defined by the caller: it writes dlen random bytes to dst */
+/*
+  private: fill_random: write dlen random bytes to dst
+  returns: 0 on success, -1 on failure
+*/
+#if !defined(TEST_VECTORS)
+static int32_t fill_random(uint8_t *dst, uint32_t dlen) {
+  int fd;
+  int32_t ret;
+  ssize_t bytes;
+
+  ret = 0;
+  fd = open("/dev/urandom", O_RDONLY);
+  if( fd == -1 )
+    return -1;
+  bytes = read(fd, dst, dlen);
+  if( bytes == -1 || (uint32_t)bytes != dlen )
+    ret = -1;
+  close(fd);
+
+  return ret;
+}
+#else
 int32_t fill_random(uint8_t *dst, uint32_t dlen);
+#endif /* TEST_VECTORS */
 
 /* private: this function implements MGF1 */
 static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t slen) {
