@@ -5,6 +5,7 @@ then
   rm -f ./vectors
   ./gentests.pl > tests.c
   gcc -O0 -g -Wall -Wextra -pedantic -DUSE_SHA1 -DTEST_VECTORS pkcs1.c pss-vect.c sha1.o -o vectors -lgmp && ./vectors
+  # TODO: try to automate valgrind & memwatch tests below
 else
   echo "SHA1 code not present, skipping verification of EMSA-PSS test vectors"
 fi

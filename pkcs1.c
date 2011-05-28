@@ -32,6 +32,12 @@
 #include "pkcs1.h"
 #include "brg-sha.h"
 
+/*
+  These macros depend on Brian Gladman's SHA code found here:
+  http://gladman.plushost.co.uk/oldsite/cryptography_technology/sha/index.php
+  To compile this source code, you need to link with sha1.c or sha2.c
+  (respectively) from the source distribution above.
+*/
 #if defined(USE_SHA1)
 #define HASH_DIGEST_SIZE 20
 #define HASH_CONTEXT sha1_ctx
@@ -98,7 +104,7 @@ static int32_t fill_random(uint8_t *dst, uint32_t dlen) {
 int32_t fill_random(uint8_t *dst, uint32_t dlen);
 #endif /* TEST_VECTORS */
 
-/* private: this function implements MGF1 */
+/* private: this function implements MGF1, the mask generation function from PKCS#1 */
 static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t slen) {
   HASH_CONTEXT ctx[1];
   icp_cast_t ibe;
