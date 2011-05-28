@@ -154,8 +154,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 
   mpz_import(m, ptbytes, 1, 1, 1, 0, message->data);
 
-  /**********************CRT*************************/
-
+  #if 1 /* Use the Chinese Remainder Theorem to calculate s */
   mpz_powm(s1, m, rsa->dmp1, rsa->p);
   mpz_powm(s2, m, rsa->dmq1, rsa->q);
 
@@ -167,9 +166,9 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 
   mpz_mul(s, rsa->q, h);
   mpz_add(s, s, s2);
-
-  /* We can also calculate s the traditional way: */
-  /* mpz_powm(s, m, rsa->d, rsa->n); */
+  #else /* We can also calculate s the traditional way: */
+  mpz_powm(s, m, rsa->d, rsa->n);
+  #endif
 
   /**************************************************/
 
@@ -259,6 +258,8 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   m      : [input] the message to be signed, size value used as message length
 
   Notes  : produced signature will be equal to octet length of rsa->n
+           This function will overwrite the contents of em.
+
   Return values:
    0     : success
   -1     : "encoding error"
