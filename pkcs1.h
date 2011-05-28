@@ -19,6 +19,7 @@
 #ifndef _PKCS1_H
 #define _PKCS1_H
 
+#include <inttypes.h>
 #include <gmp.h>
 
 typedef struct _rsa_t {

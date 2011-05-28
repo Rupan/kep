@@ -325,9 +325,9 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
 /*
   public: emsa_pss_verify: Perform EMSA-PSS signature verification (PKCS#1 v2.1)
 
-  em     : encoded message, an octet string
-  rsa    : an allocated RSA public key corresponding to the message signer
-  m      : message to be verified, an octet string
+  em     : [input] a signature of the message in m, encoded with EMSA-PSS; an octet string
+  rsa    : [input] an allocated RSA public key corresponding to the private key used to generate the signature
+  m      : [input] the message to be checked against the provided signature; an octet string
 
   Notes: This function will overwrite the contents of em.
 
