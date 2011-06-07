@@ -134,7 +134,7 @@ private: RSA signature primitive 1, using the Chinese Remainder Theorem
 
 Purpose: encrypt a message with an RSA private key and write out its signature
 Notes: signature and message may be equal, if there is enough writable space.
-Returns: -1 on error, 0 on success
+Returns: -1 on error or the number of bytes written to signature on success
 
 Parameters:
 signature: [output] storage where the message signature will be written
@@ -176,8 +176,6 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_powm(s, m, rsa->d, rsa->n);
   #endif
 
-  /**************************************************/
-
   ctbits = mpz_sizeinbase(s, 2);
   ctbytes = ctbits >> 3;
   if( (ctbits & 7) != 0 ) ctbytes++;
@@ -199,7 +197,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_clear(h);
   mpz_clear(m);
 
-  return 0;
+  return ptbytes;
 }
 
 /*
@@ -207,7 +205,7 @@ private: RSA verification primitive 1
 
 Purpose: decrypt a signature with an RSA public key and write out its message
 Notes: signature and message may be equal, if there is enough writable space.
-Returns: -1 on error, 0 on success
+Returns: -1 on error or the number of bytes written to message on success
 
 Parameters:
 signature: [input] the encrypted (signed) data to be decrypted
@@ -218,17 +216,16 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_t s, m;
   uint32_t ctBits, ctBytes, ptBits, ptBytes, diff, i;
 
-  mpz_init(s);
-  mpz_init(m);
-
   ctBits = mpz_sizeinbase(rsa->n, 2);
   ctBytes = ctBits >> 3;
   if( (ctBits & 7) != 0 ) ctBytes++;
   if( ctBytes > signature->size ) {
-    mpz_clear(m);
-    mpz_clear(s);
     return -1;
   }
+
+  mpz_init(s);
+  mpz_init(m);
+
   mpz_import(s, ctBytes, 1, 1, 1, 0, signature->data);
   ret = mpz_cmp(s, rsa->n);
   /* "signature representative out of range" */
@@ -249,9 +246,11 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   diff = ctBytes - ptBytes;
   for(i = 0; i < diff; i++) message->data[i] = 0;
   mpz_export(message->data+diff, NULL, 1, 1, 1, 0, m);
+
   mpz_clear(m);
   mpz_clear(s);
-  return 0;
+
+  return ctBytes;
 }
 
 /*
