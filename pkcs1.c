@@ -28,6 +28,7 @@
 #include <endian.h>
 #include <string.h>
 #include <inttypes.h>
+#include <stdlib.h>
 #include <gmp.h>
 #include "pkcs1.h"
 #include "brg-sha.h"
@@ -337,8 +338,6 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   rsa    : [input] an allocated RSA public key corresponding to the private key used to generate the signature
   m      : [input] the message to be checked against the provided signature; an octet string
 
-  Notes: This function will overwrite the contents of em.
-
   Return values:
    0     : success
    1     : fatal error during initialization
@@ -350,20 +349,22 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
 */
 
 int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
+  datum_t tmp;
   uint8_t mask;
   int32_t ret;
   uint32_t i, emBits, emLen, dbLen, offset;
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
-  ret = rsavp1(em, em, rsa);
-  if( ret < 0 ) return 1;
-
   ret = 0;
+  /* calculate & allocate space for local storage */
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( (emBits & 7) != 0 ) emLen++;
-  if( emLen > em->size ) return 1;
+  tmp.data = malloc(emLen);
+  if( tmp.data == NULL ) return 1;
+  tmp.size = emLen;
+  if( rsavp1(em, &tmp, rsa) < 0 ) return 1;
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
@@ -372,21 +373,25 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   else
     offset = 0;
 
+  /* initial validation of decrypted input data */
   mask = ( 0xFF >> ( 8 * emLen - emBits ) );
-  if( (em->data[0] & ~mask) != 0x00 || em->data[emLen-1] != 0xbc )
+  if( (tmp.data[0] & ~mask) != 0x00 || tmp.data[emLen-1] != 0xbc )
     ret |= 2;
 
+  /* Decode DB */
   dbLen = (emLen - HASH_DIGEST_SIZE - 1);
-  apply_mask(em->data + offset, dbLen - offset, em->data + dbLen, HASH_DIGEST_SIZE);
-  em->data[0] &= mask;
-  q = em->data;
+  apply_mask(tmp.data + offset, dbLen - offset, tmp.data + dbLen, HASH_DIGEST_SIZE);
+  tmp.data[0] &= mask;
+  q = tmp.data;
+  /* locate the sentinel value 0x01 at the end of PS */
   for(i = 0; *q == 0 && i < dbLen; i++) q++;
   if( *q++ != 0x01 ) ret |= 4;
-  if( (uint32_t)((q - em->data) + HASH_DIGEST_SIZE) != dbLen ) ret |= 8;
+  /* q now points to the salt.  verify that the lengths match up. */
+  if( (uint32_t)((q - tmp.data) + HASH_DIGEST_SIZE) != dbLen ) ret |= 8;
 
   /* M' = (0x)00 00 00 00 00 00 00 00 || mHash || salt */
   p = mp;
-  for(i = 0; i < 8; i++) p[i] = 0x00;
+  for(i = 0; i < 8; i++) p[i] = (const char)0x00;
   p += 8;
   HASH_STARTS(ctx);
   HASH_UPDATE(ctx, m->data, m->size);
@@ -400,10 +405,18 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   HASH_UPDATE(ctx, mp, sizeof(mp));
   HASH_FINISH(ctx, hp);
 
-  q = em->data + dbLen;
+  /* compare received/decoded hash to generated hash */
+  q = tmp.data + dbLen;
   for(i = 0; i < HASH_DIGEST_SIZE; i++) {
     if( q[i] != hp[i] )
       ret |= 16;
   }
+
+  /* clean up and return  */
+  for(i=0; i<tmp.size; i++)
+    tmp.data[i] = (const char)0x00;
+  free(tmp.data);
+  tmp.data = NULL;
+  tmp.size = 0;
   return ret;
 }
