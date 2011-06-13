@@ -188,7 +188,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
     return -1;
   }
   diff = ptbytes-ctbytes;
-  for(i = 0; i < diff; i++) signature->data[i] = 0;
+  for(i = 0; i < signature->size; i++) signature->data[i] = 0;
   mpz_export(signature->data+diff, NULL, 1, 1, 1, 0, s);
 
   mpz_clear(s2);
@@ -244,7 +244,7 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   }
   if( (ptBits & 7) != 0 ) ptBytes++;
   diff = ctBytes - ptBytes;
-  for(i = 0; i < diff; i++) message->data[i] = 0;
+  for(i = 0; i < message->size; i++) message->data[i] = 0;
   mpz_export(message->data+diff, NULL, 1, 1, 1, 0, m);
 
   mpz_clear(m);
@@ -267,8 +267,10 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 
   Return values:
    0     : success
-  -1     : "encoding error"
-  -2     : insufficient output space in "em"
+  -1     : insufficient output space in "em"
+  -2     : "encoding error"
+  -3     : fill_random failed
+  -4     : signing the encoded message failed
 */
 
 int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
@@ -279,10 +281,10 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( (emBits & 7) != 0 ) emLen++;
-  if( emLen > em->size ) return -2;
+  if( emLen > em->size ) return -1;
 
   if( emLen < (2*HASH_DIGEST_SIZE + 2) )
-    return -1;
+    return -2;
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
@@ -300,7 +302,7 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   HASH_FINISH(ctx, p);
   p += HASH_DIGEST_SIZE;
   if( fill_random(p, HASH_DIGEST_SIZE) < 0 )
-    return -1;
+    return -3;
 
   /* DB = PS || 0x01 || salt */
   q = em->data;
@@ -324,7 +326,7 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   /* Set the leftmost 8 * emLen - emBits bits of the leftmost octet in maskedDB to zero */
   em->data[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
 
-  if( rsasp1(em, em, rsa) < 0 ) return -2;
+  if( rsasp1(em, em, rsa) < 0 ) return -4;
   return 0;
 }
 
@@ -405,4 +407,3 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   }
   return ret;
 }
-

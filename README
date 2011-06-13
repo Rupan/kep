@@ -7,6 +7,7 @@ Notes:
 Calling processes should implement memory locking, perhaps using:
   mlockall(MCL_CURRENT|MCL_FUTURE);
 Not doing so could result in keys leaking to swap.
+However, Android kernels lack support for swap, so this may not be an issue on that platform.
 
 In the future, this library may implement custom allocation for GMP:
   http://www.gnu.org/software/gmp/manual/html_mono/gmp.html#Custom%20Allocation
