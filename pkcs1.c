@@ -338,6 +338,9 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   rsa    : [input] an allocated RSA public key corresponding to the private key used to generate the signature
   m      : [input] the message to be checked against the provided signature; an octet string
 
+  Notes: the size of 'em' can be larger than the octet length of N.  In this case only the first
+         sizeof(N) bytes in 'em' will be verified.
+
   Return values:
    0     : success
    1     : fatal error during initialization
@@ -361,6 +364,8 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( (emBits & 7) != 0 ) emLen++;
+  /* is the size of the signature in em >= the octet length of N? */
+  if( em->size < emLen ) return 1;
   tmp.data = malloc(emLen);
   if( tmp.data == NULL ) return 1;
   tmp.size = emLen;
