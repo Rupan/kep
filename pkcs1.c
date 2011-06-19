@@ -105,6 +105,16 @@ static int32_t fill_random(uint8_t *dst, uint32_t dlen) {
 int32_t fill_random(uint8_t *dst, uint32_t dlen);
 #endif /* TEST_VECTORS */
 
+static inline void free_datum(datum_t *d) {
+  uint32_t i;
+
+  for(i = 0; i < d->size; i++)
+    d->data[i] = (const char)0x00;
+  free(d->data);
+  d->data = NULL;
+  d->size = 0;
+}
+
 /* private: this function implements MGF1, the mask generation function from PKCS#1 */
 static void apply_mask(uint8_t *mask, uint32_t mlen, uint8_t *seed, uint32_t slen) {
   HASH_CONTEXT ctx[1];
@@ -418,10 +428,6 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   }
 
   /* clean up and return  */
-  for(i=0; i<tmp.size; i++)
-    tmp.data[i] = (const char)0x00;
-  free(tmp.data);
-  tmp.data = NULL;
-  tmp.size = 0;
+  free_datum(&tmp);
   return ret;
 }
