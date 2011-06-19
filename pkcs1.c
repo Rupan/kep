@@ -352,34 +352,34 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
          sizeof(N) bytes in 'em' will be verified.
 
   Return values:
-   0     : success
-   1     : fatal error during initialization
-  or a bit mask containing:
-   2     : bad first or last bytes
-   4     : bad sentinel value after PS
-   8     : PS sentinel offset does not match dbLen
-  16     : computed hash H' does not match transmitted hash H
+    0     : success
+   -1     : fatal error during initialization
+   -2     : bad first or last bytes in decrypted output
+   -3     : bad sentinel value after PS
+   -4     : PS sentinel offset does not match dbLen
+   -5     : computed hash H' does not match transmitted hash H
 */
 
 int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   datum_t tmp;
   uint8_t mask;
-  int32_t ret;
   uint32_t i, emBits, emLen, dbLen, offset;
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
-  ret = 0;
   /* calculate & allocate space for local storage */
   emBits = mpz_sizeinbase(rsa->n, 2);
   emLen = (uint32_t)(emBits/8);
   if( (emBits & 7) != 0 ) emLen++;
   /* is the size of the signature in em >= the octet length of N? */
-  if( em->size < emLen ) return 1;
+  if( em->size < emLen ) return -1;
   tmp.data = malloc(emLen);
-  if( tmp.data == NULL ) return 1;
+  if( tmp.data == NULL ) return -1;
   tmp.size = emLen;
-  if( rsavp1(em, &tmp, rsa) < 0 ) return 1;
+  if( rsavp1(em, &tmp, rsa) < 0 ) {
+    free_datum(&tmp);
+    return -1;
+  }
 
   /* emsa-pss encoding is over sizeof(N)-1 bits */
   emBits--;
@@ -390,8 +390,10 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
 
   /* initial validation of decrypted input data */
   mask = ( 0xFF >> ( 8 * emLen - emBits ) );
-  if( (tmp.data[0] & ~mask) != 0x00 || tmp.data[emLen-1] != 0xbc )
-    ret |= 2;
+  if( (tmp.data[0] & ~mask) != 0x00 || tmp.data[emLen-1] != 0xbc ) {
+    free_datum(&tmp);
+    return -2;
+  }
 
   /* Decode DB */
   dbLen = (emLen - HASH_DIGEST_SIZE - 1);
@@ -400,9 +402,15 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   q = tmp.data;
   /* locate the sentinel value 0x01 at the end of PS */
   for(i = 0; *q == 0 && i < dbLen; i++) q++;
-  if( *q++ != 0x01 ) ret |= 4;
+  if( *q++ != 0x01 ) {
+    free_datum(&tmp);
+    return -3;
+  }
   /* q now points to the salt.  verify that the lengths match up. */
-  if( (uint32_t)((q - tmp.data) + HASH_DIGEST_SIZE) != dbLen ) ret |= 8;
+  if( (uint32_t)((q - tmp.data) + HASH_DIGEST_SIZE) != dbLen ) {
+    free_datum(&tmp);
+    return -4;
+  }
 
   /* M' = (0x)00 00 00 00 00 00 00 00 || mHash || salt */
   p = mp;
@@ -423,11 +431,13 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   /* compare received/decoded hash to generated hash */
   q = tmp.data + dbLen;
   for(i = 0; i < HASH_DIGEST_SIZE; i++) {
-    if( q[i] != hp[i] )
-      ret |= 16;
+    if( q[i] != hp[i] ) {
+      free_datum(&tmp);
+      return -5;
+    }
   }
 
   /* clean up and return  */
   free_datum(&tmp);
-  return ret;
+  return 0;
 }
