@@ -31,6 +31,8 @@ typedef struct _rsa_t {
   mpz_t dmp1;   /* d mod (p-1) */
   mpz_t dmq1;   /* d mod (q-1) */
   mpz_t iqmp;   /* q^-1 mod p */
+  uint32_t n_bits;  /* the number of bits in the RSA modulus N */
+  uint32_t n_bytes; /* the number of bytes required to hold the RSA modulus N */
 } rsa_t;
 
 typedef struct _datum_t {

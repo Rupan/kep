@@ -24,6 +24,9 @@ for(my $i = 1; $i <= 10; $i++) {
   print "  mpz_import(rsa.dmp1, sizeof(k${i}dP), 1, 1, 1, 0, k${i}dP);\n";
   print "  mpz_import(rsa.dmq1, sizeof(k${i}dQ), 1, 1, 1, 0, k${i}dQ);\n";
   print "  mpz_import(rsa.iqmp, sizeof(k${i}qInv), 1, 1, 1, 0, k${i}qInv);\n";
+  print "  rsa.n_bits = mpz_sizeinbase(rsa.n, 2);\n";
+  print "  rsa.n_bytes = (uint32_t)(rsa.n_bits/8);\n";
+  print "  if( (rsa.n_bits & 7) != 0 ) rsa.n_bytes++;\n";
 
   print "  printf(\"Using key ${i}...\\n\");\n";
   for(my $j = 1; $j <= 6; $j++) {
