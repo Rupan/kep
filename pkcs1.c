@@ -271,13 +271,13 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 /*
   public: emsa_pss_encode: Perform EMSA-PSS signature padding (PKCS#1 v2.1)
 
-  em     : [output] allocated storage for the message signature
+  S      : [output] allocated storage for the message signature
            must be at least ceil(emBits/8.0) bytes long
-  rsa    : [input] an allocated RSA private key with all fields filled in
+  K      : [input] an allocated RSA private key with all fields filled in
            Specifically, all values for the CRT algorithm must be correct
-  m      : [input] the message to be signed, size value used as message length
+  M      : [input] the message to be signed, size value used as message length
 
-  Notes  : produced signature will be equal to octet length of rsa->n
+  Notes  : produced signature will be equal to octet length of K->n
            This function will overwrite the contents of em.
 
   Return values:
@@ -288,14 +288,14 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   -4     : signing the encoded message failed
 */
 
-int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
+int32_t pkcs1_sign(datum_t *S, datum_t *M, rsa_t *K) {
   uint32_t i, emBits, emLen, psLen, offset;
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], *p, *q;
 
-  emBits = rsa->n_bits;
-  emLen = rsa->n_bytes;
-  if( emLen > em->size ) return -1;
+  emBits = K->n_bits;
+  emLen = K->n_bytes;
+  if( emLen > S->size ) return -1;
 
   if( emLen < (2*HASH_DIGEST_SIZE + 2) )
     return -2;
@@ -312,14 +312,14 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   for(i = 0; i < 8; i++) p[i] = 0x00;
   p += 8;
   HASH_STARTS(ctx);
-  HASH_UPDATE(ctx, m->data, m->size);
+  HASH_UPDATE(ctx, M->data, M->size);
   HASH_FINISH(ctx, p);
   p += HASH_DIGEST_SIZE;
   if( fill_random(p, HASH_DIGEST_SIZE) < 0 )
     return -3;
 
   /* DB = PS || 0x01 || salt */
-  q = em->data;
+  q = S->data;
   psLen = emLen - 2*HASH_DIGEST_SIZE - 2;
   for(i = 0; i < psLen; i++) q[i] = 0x00;
   q += psLen;
@@ -333,26 +333,26 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   HASH_UPDATE(ctx, mp, sizeof(mp));
   HASH_FINISH(ctx, q);
 
-  apply_mask(em->data + offset, emLen - HASH_DIGEST_SIZE - 1 - offset, q, HASH_DIGEST_SIZE);
+  apply_mask(S->data + offset, emLen - HASH_DIGEST_SIZE - 1 - offset, q, HASH_DIGEST_SIZE);
   q += HASH_DIGEST_SIZE;
   *q = 0xbc;
 
   /* Set the leftmost 8 * emLen - emBits bits of the leftmost octet in maskedDB to zero */
-  em->data[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
+  S->data[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
 
-  if( rsasp1(em, em, rsa) < 0 ) return -4;
+  if( rsasp1(S, S, K) < 0 ) return -4;
   return 0;
 }
 
 /*
   public: emsa_pss_verify: Perform EMSA-PSS signature verification (PKCS#1 v2.1)
 
-  em     : [input] a signature of the message in m, encoded with EMSA-PSS; an octet string
-  rsa    : [input] an allocated RSA public key corresponding to the private key used to generate the signature
-  m      : [input] the message to be checked against the provided signature; an octet string
+  S      : [input] a signature of the message in m, encoded with EMSA-PSS; an octet string
+  K      : [input] an allocated RSA public key corresponding to the private key used to generate the signature
+  M      : [input] the message to be checked against the provided signature; an octet string
 
-  Notes: the size of 'em' can be larger than the octet length of N.  In this case only the first
-         sizeof(N) bytes in 'em' will be verified.
+  Notes: the size of 'S' can be larger than the octet length of N.  In this case only the first
+         sizeof(N) bytes in 'S' will be verified.
 
   Return values:
     0     : success
@@ -363,7 +363,7 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
    -5     : computed hash H' does not match transmitted hash H
 */
 
-int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
+int32_t pkcs1_verify(datum_t *S, datum_t *M, rsa_t *K) {
   datum_t tmp;
   uint8_t mask;
   uint32_t i, emBits, emLen, dbLen, offset;
@@ -371,14 +371,14 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
   /* calculate & allocate space for local storage */
-  emBits = rsa->n_bits;
-  emLen = rsa->n_bytes;
+  emBits = K->n_bits;
+  emLen = K->n_bytes;
   /* is the size of the signature in em >= the octet length of N? */
-  if( em->size < emLen ) return -1;
+  if( S->size < emLen ) return -1;
   tmp.data = malloc(emLen);
   if( tmp.data == NULL ) return -1;
   tmp.size = emLen;
-  if( rsavp1(em, &tmp, rsa) < 0 ) {
+  if( rsavp1(S, &tmp, K) < 0 ) {
     free_datum(&tmp);
     return -1;
   }
@@ -419,7 +419,7 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   for(i = 0; i < 8; i++) p[i] = (const char)0x00;
   p += 8;
   HASH_STARTS(ctx);
-  HASH_UPDATE(ctx, m->data, m->size);
+  HASH_UPDATE(ctx, M->data, M->size);
   HASH_FINISH(ctx, p);
   p += HASH_DIGEST_SIZE;
   for(i = 0; i < HASH_DIGEST_SIZE; i++)

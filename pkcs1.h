@@ -40,8 +40,8 @@ typedef struct _datum_t {
   uint32_t size;
 } datum_t;
 
-int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m);
-int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m);
+int32_t pkcs1_sign(datum_t *S, datum_t *M, rsa_t *K);
+int32_t pkcs1_verify(datum_t *S, datum_t *M, rsa_t *K);
 
 void rsa_init(rsa_t *rsa);
 void rsa_free(rsa_t *rsa);
