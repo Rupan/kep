@@ -35,9 +35,9 @@ for(my $i = 1; $i <= 10; $i++) {
     print "  salt = ${base}_salt;\n";
     print "  m.data = (uint8_t *)${base}_plain;\n";
     print "  m.size = (uint32_t)sizeof(${base}_plain);\n";
-    print "  emsa_pss_encode(&em, &rsa, &m);\n";
-    print "  printf(\"{V=\%d} \", emsa_pss_verify(&em, &rsa, &m));\n";
-    print "  emsa_pss_encode(&em, &rsa, &m);\n";
+    print "  pkcs1_sign(&em, &m, &rsa);\n";
+    print "  printf(\"{V=\%d} \", pkcs1_verify(&em, &m, &rsa));\n";
+    #print "  emsa_pss_encode(&em, &rsa, &m);\n";
     print "  ret = memcmp(${base}_sig, EM, $bytes );\n";
     print "  if( ret != 0 ) {\n";
     print "    printf(\"FAILURE.  <---\\n\");\n";
