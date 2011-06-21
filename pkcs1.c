@@ -156,9 +156,8 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_t m, h, s, s1, s2;
   size_t ptbits, ptbytes, ctbits, ctbytes;
 
-  ptbits = mpz_sizeinbase(rsa->n, 2);
-  ptbytes = ptbits >> 3;
-  if( (ptbits & 7) != 0 ) ptbytes++;
+  ptbits = rsa->n_bits;
+  ptbytes = rsa->n_bytes;
   if( ptbytes > message->size ) {
     return -1;
   }
@@ -227,9 +226,8 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_t s, m;
   uint32_t ctBits, ctBytes, ptBits, ptBytes, diff, i;
 
-  ctBits = mpz_sizeinbase(rsa->n, 2);
-  ctBytes = ctBits >> 3;
-  if( (ctBits & 7) != 0 ) ctBytes++;
+  ctBits = rsa->n_bits;
+  ctBytes = rsa->n_bytes;
   if( ctBytes > signature->size ) {
     return -1;
   }
@@ -289,9 +287,8 @@ int32_t emsa_pss_encode(datum_t *em, rsa_t *rsa, datum_t *m) {
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], *p, *q;
 
-  emBits = mpz_sizeinbase(rsa->n, 2);
-  emLen = (uint32_t)(emBits/8);
-  if( (emBits & 7) != 0 ) emLen++;
+  emBits = rsa->n_bits;
+  emLen = rsa->n_bytes;
   if( emLen > em->size ) return -1;
 
   if( emLen < (2*HASH_DIGEST_SIZE + 2) )
@@ -368,9 +365,8 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
   /* calculate & allocate space for local storage */
-  emBits = mpz_sizeinbase(rsa->n, 2);
-  emLen = (uint32_t)(emBits/8);
-  if( (emBits & 7) != 0 ) emLen++;
+  emBits = rsa->n_bits;
+  emLen = rsa->n_bytes;
   /* is the size of the signature in em >= the octet length of N? */
   if( em->size < emLen ) return -1;
   tmp.data = malloc(emLen);
@@ -441,3 +437,4 @@ int32_t emsa_pss_verify(datum_t *em, rsa_t *rsa, datum_t *m) {
   free_datum(&tmp);
   return 0;
 }
+
