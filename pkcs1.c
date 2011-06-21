@@ -53,6 +53,12 @@
 #define HASH_FINISH(ctx, output) sha256_end((output), (ctx))
 #endif
 
+#if __GNU_MP_VERSION >= 10 /* GMP version 5.0.0 and beyond */
+#define kep_powm(rop, base, exp, mod) mpz_powm_sec((rop), (base), (exp), (mod))
+#else
+#define kep_powm(rop, base, exp, mod) mpz_powm((rop), (base), (exp), (mod))
+#endif
+
 typedef union _icp_cast_t {
   uint32_t i;
   uint8_t c[4];
@@ -171,8 +177,8 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_import(m, ptbytes, 1, 1, 1, 0, message->data);
 
   #if 1 /* Use the Chinese Remainder Theorem to calculate s */
-  mpz_powm(s1, m, rsa->dmp1, rsa->p);
-  mpz_powm(s2, m, rsa->dmq1, rsa->q);
+  kep_powm(s1, m, rsa->dmp1, rsa->p);
+  kep_powm(s2, m, rsa->dmq1, rsa->q);
 
   if( mpz_cmp(s1, s2) < 0 )
     mpz_add(s1, s1, rsa->p);
@@ -183,7 +189,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_mul(s, rsa->q, h);
   mpz_add(s, s, s2);
   #else /* We can also calculate s the traditional way: */
-  mpz_powm(s, m, rsa->d, rsa->n);
+  kep_powm(s, m, rsa->d, rsa->n);
   #endif
 
   ctbits = mpz_sizeinbase(s, 2);
@@ -243,7 +249,7 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
     mpz_clear(s);
     return -1;
   }
-  mpz_powm(m, s, rsa->e, rsa->n);
+  kep_powm(m, s, rsa->e, rsa->n);
   ptBits = mpz_sizeinbase(m, 2);
   ptBytes = ptBits >> 3;
   if( ptBytes > message->size ) {
