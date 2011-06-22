@@ -16,6 +16,11 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/*
+TODO:
+  key material may leak from GMP objects which are not zeroed
+*/
+
 /* for fill_random */
 #if !defined(TEST_VECTORS)
 #include <sys/types.h>
@@ -53,7 +58,7 @@
 #define HASH_FINISH(ctx, output) sha256_end((output), (ctx))
 #endif
 
-#if __GNU_MP_VERSION >= 10 /* GMP version 5.0.0 and beyond */
+#if __GNU_MP_VERSION >= 5 /* GMP version 5.0.0 and beyond */
 #define kep_powm(rop, base, exp, mod) mpz_powm_sec((rop), (base), (exp), (mod))
 #else
 #define kep_powm(rop, base, exp, mod) mpz_powm((rop), (base), (exp), (mod))
@@ -156,6 +161,8 @@ Returns: -1 on error or the number of bytes written to signature on success
 Parameters:
 signature: [output] storage where the message signature will be written
 message: [input] content which must be signed (an EMSA-PSS encoded data chunk)
+
+FIXME: must do padding here to k octets
 */
 static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   uint32_t diff, i;
@@ -282,34 +289,22 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
 
   Return values:
    0     : success
-  -1     : insufficient output space in "em"
   -2     : "encoding error"
   -3     : fill_random failed
   -4     : signing the encoded message failed
 */
 
-int32_t pkcs1_sign(datum_t *S, datum_t *M, rsa_t *K) {
-  uint32_t i, emBits, emLen, psLen, offset;
+static int32_t emsa_pss_encode(datum_t *EM, datum_t *M, uint32_t emBits) {
+  uint32_t i, psLen;
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], *p, *q;
 
-  emBits = K->n_bits;
-  emLen = K->n_bytes;
-  if( emLen > S->size ) return -1;
-
-  if( emLen < (2*HASH_DIGEST_SIZE + 2) )
+  if( EM->size < (2*HASH_DIGEST_SIZE + 2) )
     return -2;
-
-  /* emsa-pss encoding is over sizeof(N)-1 bits */
-  emBits--;
-  if( (emBits & 7) == 0 )
-    offset = 1;
-  else
-    offset = 0;
 
   /* M' = (0x)00 00 00 00 00 00 00 00 || mHash || salt */
   p = mp;
-  for(i = 0; i < 8; i++) p[i] = 0x00;
+  for(i = 0; i < 8; i++) p[i] = (const uint8_t)0x00;
   p += 8;
   HASH_STARTS(ctx);
   HASH_UPDATE(ctx, M->data, M->size);
@@ -319,11 +314,11 @@ int32_t pkcs1_sign(datum_t *S, datum_t *M, rsa_t *K) {
     return -3;
 
   /* DB = PS || 0x01 || salt */
-  q = S->data;
-  psLen = emLen - 2*HASH_DIGEST_SIZE - 2;
-  for(i = 0; i < psLen; i++) q[i] = 0x00;
+  q = EM->data;
+  psLen = EM->size - 2*HASH_DIGEST_SIZE - 2;
+  for(i = 0; i < psLen; i++) q[i] = (const uint8_t)0x00;
   q += psLen;
-  *q++ = 0x01;
+  *q++ = (const uint8_t)0x01;
   for(i = 0; i < HASH_DIGEST_SIZE; i++)
     q[i] = p[i];
   q += HASH_DIGEST_SIZE;
@@ -333,14 +328,19 @@ int32_t pkcs1_sign(datum_t *S, datum_t *M, rsa_t *K) {
   HASH_UPDATE(ctx, mp, sizeof(mp));
   HASH_FINISH(ctx, q);
 
-  apply_mask(S->data + offset, emLen - HASH_DIGEST_SIZE - 1 - offset, q, HASH_DIGEST_SIZE);
+  /*
+  if( (emBits & 7) == 0 )
+    offset = 1;
+  else
+    offset = 0;
+  */
+  apply_mask(EM->data, EM->size - HASH_DIGEST_SIZE - 1, q, HASH_DIGEST_SIZE);
   q += HASH_DIGEST_SIZE;
   *q = 0xbc;
 
   /* Set the leftmost 8 * emLen - emBits bits of the leftmost octet in maskedDB to zero */
-  S->data[0] &= ( 0xFF >> ( 8 * emLen - emBits ) );
+  EM->data[0] &= ( 0xFF >> ( 8 * EM->size - emBits ) );
 
-  if( rsasp1(S, S, K) < 0 ) return -4;
   return 0;
 }
 
@@ -363,84 +363,120 @@ int32_t pkcs1_sign(datum_t *S, datum_t *M, rsa_t *K) {
    -5     : computed hash H' does not match transmitted hash H
 */
 
-int32_t pkcs1_verify(datum_t *S, datum_t *M, rsa_t *K) {
-  datum_t tmp;
+static int32_t emsa_pss_verify(datum_t *EM, datum_t *M, uint32_t emBits) {
   uint8_t mask;
-  uint32_t i, emBits, emLen, dbLen, offset;
+  uint32_t i, psLen, dbLen;
   HASH_CONTEXT ctx[1];
   uint8_t mp[8+2*HASH_DIGEST_SIZE], hp[HASH_DIGEST_SIZE],  *p, *q;
 
-  /* calculate & allocate space for local storage */
-  emBits = K->n_bits;
-  emLen = K->n_bytes;
-  /* is the size of the signature in em >= the octet length of N? */
-  if( S->size < emLen ) return -1;
-  tmp.data = malloc(emLen);
-  if( tmp.data == NULL ) return -1;
-  tmp.size = emLen;
-  if( rsavp1(S, &tmp, K) < 0 ) {
-    free_datum(&tmp);
+  /* PKCS#1, section 9.1.2, Step 3 */
+  if( EM->size < (2*HASH_DIGEST_SIZE + 2) )
     return -1;
-  }
 
-  /* emsa-pss encoding is over sizeof(N)-1 bits */
-  emBits--;
-  if( (emBits & 7) == 0 )
-    offset = 1;
-  else
-    offset = 0;
+  /* PKCS#1, section 9.1.2, Step 4 */
+  if( EM->data[EM->size-1] != (const uint8_t)0xbc )
+    return -1;
 
-  /* initial validation of decrypted input data */
-  mask = ( 0xFF >> ( 8 * emLen - emBits ) );
-  if( (tmp.data[0] & ~mask) != 0x00 || tmp.data[emLen-1] != 0xbc ) {
-    free_datum(&tmp);
-    return -2;
-  }
+  /* PKCS#1, section 9.1.2, Step 6 */
+  mask = ( 0xFF >> ( 8 * EM->size - emBits ) );
+  if( (EM->data[0] & ~mask ) != 0 )
+    return -1;
 
-  /* Decode DB */
-  dbLen = (emLen - HASH_DIGEST_SIZE - 1);
-  apply_mask(tmp.data + offset, dbLen - offset, tmp.data + dbLen, HASH_DIGEST_SIZE);
-  tmp.data[0] &= mask;
-  q = tmp.data;
-  /* locate the sentinel value 0x01 at the end of PS */
-  for(i = 0; *q == 0 && i < dbLen; i++) q++;
-  if( *q++ != 0x01 ) {
-    free_datum(&tmp);
-    return -3;
-  }
-  /* q now points to the salt.  verify that the lengths match up. */
-  if( (uint32_t)((q - tmp.data) + HASH_DIGEST_SIZE) != dbLen ) {
-    free_datum(&tmp);
-    return -4;
-  }
+  /* PKCS#1, section 9.1.2, Steps 5, 7, 8, and 9 */
+  dbLen = (EM->size - HASH_DIGEST_SIZE - 1);
+  apply_mask(EM->data, dbLen, EM->data + dbLen, HASH_DIGEST_SIZE);
+  EM->data[0] &= mask;
+  q = EM->data;
+  /* PKCS#1, section 9.1.2, Step 10 */
+  psLen = EM->size - 2*HASH_DIGEST_SIZE - 2;
+  for(i = 0; i < psLen; i++, q++)
+    if( *q != (const uint8_t)0x00 )
+      return -1;
+  if( *q++ != (const uint8_t)0x01 )
+    return -1;
 
-  /* M' = (0x)00 00 00 00 00 00 00 00 || mHash || salt */
+  /* PKCS#1, section 9.1.2, Step 12: M' = (0x)00 00 00 00 00 00 00 00 || mHash || salt */
   p = mp;
-  for(i = 0; i < 8; i++) p[i] = (const char)0x00;
+  for(i = 0; i < 8; i++) p[i] = (const uint8_t)0x00;
   p += 8;
+  /* PKCS#1, section 9.1.2, Step 2 */
   HASH_STARTS(ctx);
   HASH_UPDATE(ctx, M->data, M->size);
   HASH_FINISH(ctx, p);
   p += HASH_DIGEST_SIZE;
+  /* PKCS#1, section 9.1.2, Step 11 */
   for(i = 0; i < HASH_DIGEST_SIZE; i++)
     p[i] = q[i];
 
-  /* Let H' = Hash(M'), an octet string of length hLen */
+  /* PKCS#1, section 9.1.2, Step 13: Let H' = Hash(M'), an octet string of length hLen */
   HASH_STARTS(ctx);
   HASH_UPDATE(ctx, mp, sizeof(mp));
   HASH_FINISH(ctx, hp);
 
-  /* compare received/decoded hash to generated hash */
-  q = tmp.data + dbLen;
+  /* PKCS#1, section 9.1.2, Step 14 */
+  q = EM->data + dbLen;
+  mask = 0;
   for(i = 0; i < HASH_DIGEST_SIZE; i++) {
     if( q[i] != hp[i] ) {
-      free_datum(&tmp);
-      return -5;
+      mask = 1;
     }
   }
 
-  /* clean up and return  */
-  free_datum(&tmp);
-  return 0;
+  return mask;
+}
+
+/*
+8.1.1 Signature generation operation
+Let k = the length in octets of the RSA modulus n
+Writes k bytes to S and updates its length
+*/
+int32_t rsassa_pss_sign(datum_t *S, datum_t *M, rsa_t *K) {
+  int32_t ret;
+  datum_t EM;
+  uint32_t tmp;
+
+  /* EMSA-PSS encoding is over ⌈(modBits-1)/8⌉ */
+  tmp = K->n_bits - 1;
+  EM.size = tmp >> 3;
+  if( tmp & 7 ) EM.size++;
+  EM.data = malloc(EM.size);
+  if( EM.data == NULL ) {
+    return -1;
+  }
+
+  /* EM = EMSA-PSS-ENCODE (M, modBits - 1) */
+  ret = emsa_pss_encode(&EM, M, tmp);
+  /* RSA signature: s = RSASP1 (K, m) */
+  ret = rsasp1(S, &EM, K);
+  free_datum(&EM);
+
+  return ret;
+}
+
+int32_t rsassa_pss_verify(datum_t *S, datum_t *M, rsa_t *K) {
+  int32_t ret;
+  datum_t EM;
+  uint32_t tmp;
+
+  /* EMSA-PSS encoding is over ⌈(modBits-1)/8⌉ */
+  tmp = K->n_bits - 1;
+  EM.size = tmp >> 3;
+  if( tmp & 7 ) EM.size++;
+  EM.data = malloc(EM.size);
+  if( EM.data == NULL ) {
+    return -1;
+  }
+
+  #if !defined(TEST_VECTORS)
+  if( S->size != K->n_bytes ) return -2; /* invalid signature */
+  #else
+  if( S->size < K->n_bytes ) return -2; /* invalid signature */
+  #endif
+  ret = rsavp1(S, &EM, K);
+  /* Result = EMSA-PSS-VERIFY (M, EM, modBits - 1) */
+  ret = emsa_pss_verify(&EM, M, tmp);
+  free_datum(&EM);
+
+  return ret;
 }
 
