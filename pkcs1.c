@@ -161,27 +161,23 @@ Returns: -1 on error or the number of bytes written to signature on success
 Parameters:
 signature: [output] storage where the message signature will be written
 message: [input] content which must be signed (an EMSA-PSS encoded data chunk)
-
-FIXME: must do padding here to k octets
 */
 static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   uint32_t diff, i;
   mpz_t m, h, s, s1, s2;
-  size_t ptbits, ptbytes, ctbits, ctbytes;
-
-  ptbits = rsa->n_bits;
-  ptbytes = rsa->n_bytes;
-  if( ptbytes > message->size ) {
-    return -1;
-  }
+  size_t ctbits, ctbytes;
 
   mpz_init(m);
+  mpz_import(m, message->size, 1, 1, 1, 0, message->data);
+  if( mpz_cmp(m, rsa->n) >= 0 ) {
+    mpz_clear(m);
+    return -1; /* message representative out of range */
+  }
+
   mpz_init(h);
   mpz_init(s);
   mpz_init(s1);
   mpz_init(s2);
-
-  mpz_import(m, ptbytes, 1, 1, 1, 0, message->data);
 
   #if 1 /* Use the Chinese Remainder Theorem to calculate s */
   kep_powm(s1, m, rsa->dmp1, rsa->p);
@@ -202,7 +198,8 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   ctbits = mpz_sizeinbase(s, 2);
   ctbytes = ctbits >> 3;
   if( (ctbits & 7) != 0 ) ctbytes++;
-  if( ctbytes > signature->size ) {
+  diff = rsa->n_bytes - ctbytes;
+  if( (ctbytes + diff) > signature->size ) {
     mpz_clear(s2);
     mpz_clear(s1);
     mpz_clear(s);
@@ -210,7 +207,6 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
     mpz_clear(m);
     return -1;
   }
-  diff = ptbytes-ctbytes;
   for(i = 0; i < signature->size; i++) signature->data[i] = 0;
   mpz_export(signature->data+diff, NULL, 1, 1, 1, 0, s);
 
@@ -220,7 +216,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_clear(h);
   mpz_clear(m);
 
-  return ptbytes;
+  return 0;
 }
 
 /*
