@@ -328,12 +328,6 @@ static int32_t emsa_pss_encode(datum_t *EM, datum_t *M, uint32_t emBits) {
   HASH_UPDATE(ctx, mp, sizeof(mp));
   HASH_FINISH(ctx, q);
 
-  /*
-  if( (emBits & 7) == 0 )
-    offset = 1;
-  else
-    offset = 0;
-  */
   apply_mask(EM->data, EM->size - HASH_DIGEST_SIZE - 1, q, HASH_DIGEST_SIZE);
   q += HASH_DIGEST_SIZE;
   *q = 0xbc;
@@ -467,11 +461,7 @@ int32_t rsassa_pss_verify(datum_t *S, datum_t *M, rsa_t *K) {
     return -1;
   }
 
-  #if !defined(TEST_VECTORS)
   if( S->size != K->n_bytes ) return -2; /* invalid signature */
-  #else
-  if( S->size < K->n_bytes ) return -2; /* invalid signature */
-  #endif
   ret = rsavp1(S, &EM, K);
   /* Result = EMSA-PSS-VERIFY (M, EM, modBits - 1) */
   ret = emsa_pss_verify(&EM, M, tmp);

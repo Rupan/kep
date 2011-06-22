@@ -27,6 +27,7 @@ for(my $i = 1; $i <= 10; $i++) {
   print "  rsa.n_bits = mpz_sizeinbase(rsa.n, 2);\n";
   print "  rsa.n_bytes = (uint32_t)(rsa.n_bits/8);\n";
   print "  if( (rsa.n_bits & 7) != 0 ) rsa.n_bytes++;\n";
+  print "  em.size = $bytes;\n";
 
   print "  printf(\"Using key ${i}...\\n\");\n";
   for(my $j = 1; $j <= 6; $j++) {
