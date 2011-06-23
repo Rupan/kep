@@ -431,16 +431,23 @@ int32_t rsassa_pss_sign(datum_t *S, datum_t *M, rsa_t *K) {
   if( tmp & 7 ) EM.size++;
   EM.data = malloc(EM.size);
   if( EM.data == NULL ) {
-    return -1;
+    return -15;
   }
 
   /* EM = EMSA-PSS-ENCODE (M, modBits - 1) */
   ret = emsa_pss_encode(&EM, M, tmp);
+  if( ret < 0 ) {
+    free_datum(&EM);
+    return -30;
+  }
   /* RSA signature: s = RSASP1 (K, m) */
   ret = rsasp1(S, &EM, K);
+  if( ret < 0 ) {
+    free_datum(&EM);
+    return -45;
+  }
   free_datum(&EM);
-
-  return ret;
+  return 0;
 }
 
 int32_t rsassa_pss_verify(datum_t *S, datum_t *M, rsa_t *K) {
@@ -454,15 +461,22 @@ int32_t rsassa_pss_verify(datum_t *S, datum_t *M, rsa_t *K) {
   if( tmp & 7 ) EM.size++;
   EM.data = malloc(EM.size);
   if( EM.data == NULL ) {
-    return -1;
+    return -15;
   }
 
   if( S->size != K->n_bytes ) return -2; /* invalid signature */
   ret = rsavp1(S, &EM, K);
+  if( ret < 0 ) {
+    free_datum(&EM);
+    return -30;
+  }
   /* Result = EMSA-PSS-VERIFY (M, EM, modBits - 1) */
   ret = emsa_pss_verify(&EM, M, tmp);
+  if( ret < 0 ) {
+    free_datum(&EM);
+    return -45;
+  }
   free_datum(&EM);
-
-  return ret;
+  return 0;
 }
 
