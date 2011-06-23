@@ -233,42 +233,37 @@ message: [output] storage for the decrypted data (an EMSA-PSS encoded data chunk
 static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   int ret;
   mpz_t s, m;
-  uint32_t ctBits, ctBytes, ptBits, ptBytes, diff, i;
-
-  ctBits = rsa->n_bits;
-  ctBytes = rsa->n_bytes;
-  if( ctBytes > signature->size ) {
-    return -1;
-  }
+  uint32_t ptBits, ptBytes, diff, i;
 
   mpz_init(s);
   mpz_init(m);
 
-  mpz_import(s, ctBytes, 1, 1, 1, 0, signature->data);
+  mpz_import(s, signature->size, 1, 1, 1, 0, signature->data);
   ret = mpz_cmp(s, rsa->n);
-  /* "signature representative out of range" */
   if(ret >= 0 ) {
+    /* "signature representative out of range" */
     mpz_clear(m);
     mpz_clear(s);
     return -1;
   }
   kep_powm(m, s, rsa->e, rsa->n);
+
   ptBits = mpz_sizeinbase(m, 2);
   ptBytes = ptBits >> 3;
-  if( ptBytes > message->size ) {
+  if( (ptBits & 7) != 0 ) ptBytes++;
+  diff = message->size - ptBytes;
+  if( ptBytes+diff > message->size ) {
     mpz_clear(m);
     mpz_clear(s);
-    return -1;
+    return -2;
   }
-  if( (ptBits & 7) != 0 ) ptBytes++;
-  diff = ctBytes - ptBytes;
   for(i = 0; i < message->size; i++) message->data[i] = 0;
   mpz_export(message->data+diff, NULL, 1, 1, 1, 0, m);
 
   mpz_clear(m);
   mpz_clear(s);
 
-  return ctBytes;
+  return 0;
 }
 
 /*
