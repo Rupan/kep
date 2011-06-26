@@ -69,6 +69,22 @@ typedef union _icp_cast_t {
   uint8_t c[4];
 } icp_cast_t;
 
+static void mpz_clear_sec(mpz_t secret) {
+  uint8_t *zero;
+  size_t bytes;
+
+  /* mpz_size() counts the number of limbs used (not allocated) */
+  bytes = mpz_size(secret) * (GMP_LIMB_BITS / 8);
+  zero = calloc(bytes, 1);
+  if( zero == NULL ) {
+    mpz_clear(secret);
+    return;
+  }
+  mpz_import(secret, bytes, 1, 1, 1, 0, zero);
+  free(zero);
+  mpz_clear(secret);
+}
+
 void rsa_init(rsa_t *rsa) {
   mpz_init(rsa->n);
   mpz_init(rsa->e);
@@ -81,14 +97,14 @@ void rsa_init(rsa_t *rsa) {
 }
 
 void rsa_free(rsa_t *rsa) {
-  mpz_clear(rsa->n);
-  mpz_clear(rsa->e);
-  mpz_clear(rsa->d);
-  mpz_clear(rsa->p);
-  mpz_clear(rsa->q);
-  mpz_clear(rsa->dmp1);
-  mpz_clear(rsa->dmq1);
-  mpz_clear(rsa->iqmp);
+  mpz_clear_sec(rsa->n);
+  mpz_clear_sec(rsa->e);
+  mpz_clear_sec(rsa->d);
+  mpz_clear_sec(rsa->p);
+  mpz_clear_sec(rsa->q);
+  mpz_clear_sec(rsa->dmp1);
+  mpz_clear_sec(rsa->dmq1);
+  mpz_clear_sec(rsa->iqmp);
 }
 
 /*
@@ -170,7 +186,7 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   mpz_init(m);
   mpz_import(m, message->size, 1, 1, 1, 0, message->data);
   if( mpz_cmp(m, rsa->n) >= 0 ) {
-    mpz_clear(m);
+    mpz_clear_sec(m);
     return -1; /* message representative out of range */
   }
 
@@ -200,21 +216,21 @@ static int rsasp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   if( (ctbits & 7) != 0 ) ctbytes++;
   diff = rsa->n_bytes - ctbytes;
   if( (ctbytes + diff) > signature->size ) {
-    mpz_clear(s2);
-    mpz_clear(s1);
-    mpz_clear(s);
-    mpz_clear(h);
-    mpz_clear(m);
+    mpz_clear_sec(s2);
+    mpz_clear_sec(s1);
+    mpz_clear_sec(s);
+    mpz_clear_sec(h);
+    mpz_clear_sec(m);
     return -1;
   }
   for(i = 0; i < signature->size; i++) signature->data[i] = 0;
   mpz_export(signature->data+diff, NULL, 1, 1, 1, 0, s);
 
-  mpz_clear(s2);
-  mpz_clear(s1);
-  mpz_clear(s);
-  mpz_clear(h);
-  mpz_clear(m);
+  mpz_clear_sec(s2);
+  mpz_clear_sec(s1);
+  mpz_clear_sec(s);
+  mpz_clear_sec(h);
+  mpz_clear_sec(m);
 
   return 0;
 }
@@ -242,8 +258,8 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   ret = mpz_cmp(s, rsa->n);
   if(ret >= 0 ) {
     /* "signature representative out of range" */
-    mpz_clear(m);
-    mpz_clear(s);
+    mpz_clear_sec(m);
+    mpz_clear_sec(s);
     return -1;
   }
   kep_powm(m, s, rsa->e, rsa->n);
@@ -253,15 +269,15 @@ static int rsavp1(datum_t *signature, datum_t *message, rsa_t *rsa) {
   if( (ptBits & 7) != 0 ) ptBytes++;
   diff = message->size - ptBytes;
   if( ptBytes+diff > message->size ) {
-    mpz_clear(m);
-    mpz_clear(s);
+    mpz_clear_sec(m);
+    mpz_clear_sec(s);
     return -2;
   }
   for(i = 0; i < message->size; i++) message->data[i] = 0;
   mpz_export(message->data+diff, NULL, 1, 1, 1, 0, m);
 
-  mpz_clear(m);
-  mpz_clear(s);
+  mpz_clear_sec(m);
+  mpz_clear_sec(s);
 
   return 0;
 }
