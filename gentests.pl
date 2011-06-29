@@ -37,9 +37,11 @@ for(my $i = 1; $i <= 10; $i++) {
     print "  m.data = (uint8_t *)${base}_plain;\n";
     print "  m.size = (uint32_t)sizeof(${base}_plain);\n";
     print "  rsassa_pss_sign(&em, &m, &rsa);\n";
-    print "  printf(\"{V=\%d} \", rsassa_pss_verify(&em, &m, &rsa));\n";
-    #print "  emsa_pss_encode(&em, &rsa, &m);\n";
+    print "  ret = rsassa_pss_verify(&em, &m, &rsa);\n";
+    print "  printf(\"{V=\%d} \", ret);\n";
+    print "  vf += ret;\n";
     print "  ret = memcmp(${base}_sig, EM, $bytes );\n";
+    print "  mc += ret;\n";
     print "  if( ret != 0 ) {\n";
     print "    printf(\"FAILURE.  <---\\n\");\n";
     print "    printf(\"\\n\\n\");\n";

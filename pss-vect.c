@@ -47,13 +47,14 @@ int32_t fill_random(uint8_t *dst, uint32_t dlen) {
 int main(int argc, char **argv) {
   int ret;
   rsa_t rsa;
+  uint32_t mc, vf;
   datum_t em, m;
   uint8_t EM[256];
 
   mlockall(MCL_CURRENT|MCL_FUTURE);
 
   rsa_init(&rsa);
-
+  mc = vf = 0;
   em.data = (uint8_t *)EM;
   em.size = (uint32_t)sizeof(EM);
 
@@ -68,6 +69,8 @@ on the left with zeros.
   rsa_free(&rsa);
 
   munlockall();
+
+  printf("\nTest run completed with %d miscompares and %d verification failures.\n\n", mc, vf);
 
   return 0;
 }
